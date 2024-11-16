@@ -1,0 +1,29 @@
+name: Transit
+version: ${version}
+main: com.example.transit.TransitPlugin
+api-version: 1.20
+depend: [Vault]
+commands:
+  transit:
+    description: Main transit command
+    usage: /transit <subcommand>
+  station:
+    description: Station management command
+    usage: /station <subcommand>
+  route:
+    description: Route management command
+    usage: /route <subcommand>
+  fare:
+    description: Fare management command
+    usage: /fare <subcommand>
+
+permissions:
+  transit.admin:
+    description: Allows full access to all transit commands
+    default: op
+  transit.staff:
+    description: Allows access to staff commands
+    default: false
+  transit.user:
+    description: Allows access to user commands
+    default: true
