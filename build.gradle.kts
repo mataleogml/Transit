@@ -1,30 +1,31 @@
 plugins {
     kotlin("jvm") version "1.9.21"
     id("com.github.johnrengelman.shadow") version "8.1.1"
-    id("com.gradle.enterprise") version "3.18.1"
 }
 
 group = "com.example"
 version = "1.0-SNAPSHOT"
 
-// Set Java toolchain
+// Keep Java toolchain at 21
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 
-// Ensure Kotlin targets Java 17
+// Set Kotlin to target Java 21 (latest supported)
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "21"  // Changed from "21" to "21"
     }
 }
 
-// Ensure Java compilation also targets Java 17
+// Keep Java compilation targeting Java 21
 tasks.withType<JavaCompile> {
-    sourceCompatibility = JavaVersion.VERSION_17.toString()
-    targetCompatibility = JavaVersion.VERSION_17.toString()
+    sourceCompatibility = JavaVersion.VERSION_21.toString()
+    targetCompatibility = JavaVersion.VERSION_21.toString()
+    options.compilerArgs.add("--enable-preview")
+    options.release.set(21)
 }
 
 repositories {
@@ -37,7 +38,8 @@ dependencies {
     compileOnly("org.spigotmc:spigot-api:1.20.4-R0.1-SNAPSHOT")
     compileOnly("com.github.MilkBowl:VaultAPI:1.7")
     implementation(kotlin("stdlib"))
-    
+    implementation("com.zaxxer:HikariCP:5.0.1")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8")
     testImplementation(kotlin("test"))
     testImplementation("org.mockito:mockito-core:5.3.1")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.1.0")
@@ -61,13 +63,6 @@ tasks {
 
     test {
         useJUnitPlatform()
-    }
-}
-
-// Configure Gradle Enterprise Plugin
-gradleEnterprise {
-    buildScan {
-        termsOfServiceUrl = "https://gradle.com/terms-of-service"
-        termsOfServiceAgree = "yes"
+        jvmArgs("--enable-preview")
     }
 }

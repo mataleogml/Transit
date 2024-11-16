@@ -1,3 +1,4 @@
+// Models.kt
 package com.example.transit.model
 
 import org.bukkit.Location
@@ -15,15 +16,6 @@ enum class PaymentPeriod {
     DAILY,
     WEEKLY,
     MONTHLY
-}
-
-enum class TransactionType {
-    ENTRY,
-    EXIT,
-    INTERCHANGE_ENTRY,
-    INTERCHANGE_EXIT,
-    FLAT_RATE,
-    REFUND
 }
 
 enum class StationStatus {
@@ -87,14 +79,4 @@ data class Gate(
 data class ZoneGroup(
     val name: String,
     val zones: Set<String>
-)
-
-data class FareRule(
-    val fromPattern: String?,
-    val toPattern: String?,
-    val fare: Double,
-    val ringDifference: Int?,
-    val fromGroup: String?,
-    val toGroup: String?,
-    val crossGroup: Boolean = false
 )

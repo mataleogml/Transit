@@ -38,41 +38,14 @@ class StationCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
         return true
     }
 
-    private fun handleAddStation(player: Player, args: Array<out String>) {
+    private fun handleRemoveStation(player: Player, args: Array<out String>) {
         if (!player.hasPermission("transit.admin")) {
-            player.sendMessage("§cYou don't have permission to add stations!")
+            player.sendMessage("§cYou don't have permission to remove stations!")
             return
         }
 
         if (args.size < 3) {
-            player.sendMessage("§cUsage: /station add <system> <name> [zone]")
-            return
-        }
-
-        val system = args[1]
-        val name = args[2]
-        val zone = if (args.size > 3) args[3] else "1"
-
-        val station = Station(
-            id = "${system}_${name.toLowerCase()}",
-            name = name,
-            systemId = system,
-            location = player.location,
-            zone = zone
-        )
-
-        plugin.stationManager.addStation(station)
-        player.sendMessage("§aStation $name added to system $system in zone $zone")
-    }
-
-    private fun handleStationStatus(player: Player, args: Array<out String>, status: StationStatus) {
-        if (!player.hasPermission("transit.admin")) {
-            player.sendMessage("§cYou don't have permission to modify stations!")
-            return
-        }
-
-        if (args.size < 3) {
-            player.sendMessage("§cUsage: /station ${args[0]} <system> <station>")
+            player.sendMessage("§cUsage: /station remove <system> <name>")
             return
         }
 
@@ -80,12 +53,67 @@ class StationCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
         val stationName = args[2]
         val stationId = "${systemId}_${stationName.toLowerCase()}"
 
-        if (plugin.stationManager.updateStationStatus(stationId, status)) {
-            val statusText = if (status == StationStatus.ACTIVE) "enabled" else "disabled"
-            player.sendMessage("§aStation $stationName has been $statusText")
+        if (plugin.stationManager.removeStation(stationId)) {
+            player.sendMessage("§aStation $stationName removed from system $systemId")
         } else {
             player.sendMessage("§cStation not found!")
         }
+    }
+
+    private fun handleTeleport(player: Player, args: Array<out String>) {
+        if (!player.hasPermission("transit.tp")) {
+            player.sendMessage("§cYou don't have permission to teleport to stations!")
+            return
+        }
+
+        if (args.size < 3) {
+            player.sendMessage("§cUsage: /station tp <system> <name>")
+            return
+        }
+
+        val systemId = args[1]
+        val stationName = args[2]
+        val stationId = "${systemId}_${stationName.toLowerCase()}"
+
+        val station = plugin.stationManager.getStation(stationId)
+        if (station != null) {
+            player.teleport(station.location)
+            player.sendMessage("§aTeleported to station ${station.name}")
+        } else {
+            player.sendMessage("§cStation not found!")
+        }
+    }
+
+    private fun handleList(player: Player, args: Array<out String>) {
+        if (args.size < 2) {
+            player.sendMessage("§cUsage: /station list <system>")
+            return
+        }
+
+        val systemId = args[1]
+        val stations = plugin.stationManager.getSystemStations(systemId)
+        
+        if (stations.isEmpty()) {
+            player.sendMessage("§cNo stations found for system $systemId")
+            return
+        }
+
+        player.sendMessage("§6Stations in system $systemId:")
+        stations.forEach { station ->
+            player.sendMessage("§7- ${station.name} (Zone: ${station.zone})")
+        }
+    }
+
+    private fun sendHelp(player: Player) {
+        player.sendMessage("""
+            §6Station Commands:
+            §f/station add <system> <name> [zone] - Create a new station
+            §f/station remove <system> <name> - Remove a station
+            §f/station enable <system> <name> - Enable a station
+            §f/station disable <system> <name> - Disable a station
+            §f/station tp <system> <name> - Teleport to a station
+            §f/station list <system> - List all stations in a system
+        """.trimIndent())
     }
 
     override fun onTabComplete(

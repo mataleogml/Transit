@@ -15,20 +15,62 @@ class RouteManager(private val plugin: TransitPlugin) {
         loadRoutes()
     }
 
-    fun addRoute(route: Route) {
+    private fun loadRoutes() {
+        for (routeId in config.getKeys(false)) {
+            val section = config.getConfigurationSection(routeId) ?: continue
+            try {
+                routes[routeId] = Route(
+                    id = routeId,
+                    name = section.getString("name") ?: continue,
+                    systemId = section.getString("systemId") ?: continue,
+                    stations = section.getStringList("stations").toMutableList()
+                )
+            } catch (e: Exception) {
+                plugin.logger.severe("Failed to load route $routeId: ${e.message}")
+            }
+        }
+    }
+
+    fun addRoute(route: Route): Boolean {
+        if (routes.containsKey(route.id)) return false
         routes[route.id] = route
         saveRoute(route)
+        return true
+    }
+
+    fun removeRoute(routeId: String): Boolean {
+        if (!routes.containsKey(routeId)) return false
+        routes.remove(routeId)
+        config.set(routeId, null)
+        saveConfig()
+        return true
     }
 
     fun getRoute(id: String): Route? = routes[id]
 
+    fun getRoutes(): List<String> = routes.keys.toList()
+
+    fun getSystems(): List<String> = routes.values.map { it.systemId }.distinct()
+
     fun getSystemRoutes(systemId: String): List<Route> =
         routes.values.filter { it.systemId == systemId }
+
+    fun getStationRoutes(stationId: String): List<Route> =
+        routes.values.filter { it.stations.contains(stationId) }
 
     fun addStationToRoute(routeId: String, stationId: String): Boolean {
         return routes[routeId]?.let { route ->
             if (!route.stations.contains(stationId)) {
                 route.stations.add(stationId)
+                saveRoute(route)
+                true
+            } else false
+        } ?: false
+    }
+
+    fun removeStationFromRoute(routeId: String, stationId: String): Boolean {
+        return routes[routeId]?.let { route ->
+            if (route.stations.remove(stationId)) {
                 saveRoute(route)
                 true
             } else false
@@ -46,25 +88,10 @@ class RouteManager(private val plugin: TransitPlugin) {
         } ?: false
     }
 
-    private fun loadRoutes() {
-        config.getKeys(false).forEach { id ->
-            val section = config.getConfigurationSection(id) ?: return@forEach
-            
-            routes[id] = Route(
-                id = id,
-                name = section.getString("name") ?: "",
-                systemId = section.getString("system") ?: "",
-                stations = section.getStringList("stations").toMutableList()
-            )
-        }
-    }
-
     private fun saveRoute(route: Route) {
-        config.apply {
-            set("${route.id}.name", route.name)
-            set("${route.id}.system", route.systemId)
-            set("${route.id}.stations", route.stations)
-        }
+        config.set("${route.id}.name", route.name)
+        config.set("${route.id}.systemId", route.systemId)
+        config.set("${route.id}.stations", route.stations)
         saveConfig()
     }
 

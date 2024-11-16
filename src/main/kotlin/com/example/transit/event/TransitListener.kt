@@ -7,8 +7,9 @@ import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerQuitEvent
 import org.bukkit.event.server.PluginDisableEvent
-import net.milkbowl.vault.economy.EconomyResponse
 import org.bukkit.event.server.ServerLoadEvent
+import java.time.LocalDateTime
+import java.time.temporal.ChronoUnit
 
 class TransitListener(private val plugin: TransitPlugin) : Listener {
 
@@ -20,13 +21,12 @@ class TransitListener(private val plugin: TransitPlugin) : Listener {
         }
 
         // Check for incomplete journeys
-        plugin.fareManager.checkIncompleteJourneys(event.player)
+        checkIncompleteJourneys(event.player)
     }
 
     @EventHandler
     fun onPlayerQuit(event: PlayerQuitEvent) {
-        // Handle any active journeys
-        plugin.fareManager.handlePlayerQuit(event.player)
+        handlePlayerQuit(event.player)
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -40,6 +40,37 @@ class TransitListener(private val plugin: TransitPlugin) : Listener {
     fun onPluginDisable(event: PluginDisableEvent) {
         if (event.plugin.name == "Vault") {
             plugin.logger.severe("Vault plugin disabled - Transit plugin may not function correctly!")
+        }
+    }
+
+    private fun checkIncompleteJourneys(player: org.bukkit.entity.Player) {
+        val activeJourney = plugin.fareManager.getActiveJourney(player.uniqueId)
+        if (activeJourney != null) {
+            val timeSinceStart = ChronoUnit.MINUTES.between(
+                activeJourney.startTime,
+                LocalDateTime.now()
+            )
+            
+            if (timeSinceStart > plugin.config.getLong("settings.maxTapDuration", 120)) {
+                // Journey exceeded maximum duration, apply maximum fare
+                val system = plugin.configManager.getTransitSystem(activeJourney.systemId)
+                if (system != null) {
+                    plugin.fareManager.chargeMaximumFare(player, system)
+                }
+                plugin.fareManager.clearActiveJourney(player.uniqueId)
+            }
+        }
+    }
+
+    private fun handlePlayerQuit(player: org.bukkit.entity.Player) {
+        val activeJourney = plugin.fareManager.getActiveJourney(player.uniqueId)
+        if (activeJourney != null) {
+            val system = plugin.configManager.getTransitSystem(activeJourney.systemId)
+            if (system != null) {
+                // Player quit with active journey, charge maximum fare
+                plugin.fareManager.chargeMaximumFare(player, system)
+            }
+            plugin.fareManager.clearActiveJourney(player.uniqueId)
         }
     }
 }

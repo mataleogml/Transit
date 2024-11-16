@@ -1,12 +1,14 @@
-package com.example.transit.database
+package com.example.transit.manager
 
 import com.example.transit.TransitPlugin
-import com.example.transit.model.*
+import com.example.transit.model.Transaction
+import com.example.transit.model.TransactionType
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import java.sql.Connection
 import java.sql.SQLException
 import java.time.LocalDateTime
+import java.util.UUID
 
 class DatabaseManager(private val plugin: TransitPlugin) {
     private var dataSource: HikariDataSource? = null
@@ -16,34 +18,6 @@ class DatabaseManager(private val plugin: TransitPlugin) {
             setupHikari()
             createTables()
         }
-    }
-
-    private fun setupHikari() {
-        val config = HikariConfig().apply {
-            jdbcUrl = buildJdbcUrl()
-            username = plugin.config.getString("database.mysql.username")
-            password = plugin.config.getString("database.mysql.password")
-            maximumPoolSize = 10
-            minimumIdle = 2
-            idleTimeout = 300000 // 5 minutes
-            connectionTimeout = 10000 // 10 seconds
-            validationTimeout = 5000 // 5 seconds
-        }
-
-        try {
-            dataSource = HikariDataSource(config)
-        } catch (e: Exception) {
-            plugin.logger.severe("Failed to initialize database connection: ${e.message}")
-        }
-    }
-
-    private fun buildJdbcUrl(): String {
-        val host = plugin.config.getString("database.mysql.host", "localhost")
-        val port = plugin.config.getInt("database.mysql.port", 3306)
-        val database = plugin.config.getString("database.mysql.database", "transit")
-        val prefix = plugin.config.getString("database.mysql.prefix", "transit_")
-        
-        return "jdbc:mysql://$host:$port/$database?useSSL=false&serverTimezone=UTC"
     }
 
     private fun createTables() {
@@ -76,6 +50,33 @@ class DatabaseManager(private val plugin: TransitPlugin) {
         """)
     }
 
+    private fun setupHikari() {
+        val config = HikariConfig().apply {
+            jdbcUrl = buildJdbcUrl()
+            username = plugin.config.getString("database.mysql.username")
+            password = plugin.config.getString("database.mysql.password")
+            maximumPoolSize = 10
+            minimumIdle = 2
+            idleTimeout = 300000
+            connectionTimeout = 10000
+            validationTimeout = 5000
+        }
+
+        try {
+            dataSource = HikariDataSource(config)
+        } catch (e: Exception) {
+            plugin.logger.severe("Failed to initialize database connection: ${e.message}")
+        }
+    }
+
+    private fun buildJdbcUrl(): String {
+        val host = plugin.config.getString("database.mysql.host", "localhost")
+        val port = plugin.config.getInt("database.mysql.port", 3306)
+        val database = plugin.config.getString("database.mysql.database", "transit")
+        
+        return "jdbc:mysql://$host:$port/$database?useSSL=false&serverTimezone=UTC"
+    }
+
     fun saveTransaction(transaction: Transaction) {
         executeUpdate("""
             INSERT INTO ${getTableName("transactions")} 
@@ -90,58 +91,6 @@ class DatabaseManager(private val plugin: TransitPlugin) {
             stmt.setDouble(6, transaction.amount)
             stmt.setString(7, transaction.type.name)
             stmt.setString(8, transaction.timestamp.toString())
-        }
-    }
-
-    fun getTransactions(
-        systemId: String? = null,
-        playerId: String? = null,
-        startTime: LocalDateTime? = null,
-        endTime: LocalDateTime? = null
-    ): List<Transaction> {
-        val conditions = mutableListOf<String>()
-        val params = mutableListOf<Pair<Int, Any>>()
-        var paramIndex = 1
-
-        systemId?.let {
-            conditions.add("system_id = ?")
-            params.add(paramIndex++ to it)
-        }
-        playerId?.let {
-            conditions.add("player_id = ?")
-            params.add(paramIndex++ to it)
-        }
-        startTime?.let {
-            conditions.add("timestamp >= ?")
-            params.add(paramIndex++ to it.toString())
-        }
-        endTime?.let {
-            conditions.add("timestamp <= ?")
-            params.add(paramIndex++ to it.toString())
-        }
-
-        val whereClause = if (conditions.isNotEmpty()) 
-            "WHERE ${conditions.joinToString(" AND ")}" else ""
-
-        return executeQuery("""
-            SELECT * FROM ${getTableName("transactions")} 
-            $whereClause 
-            ORDER BY timestamp DESC
-        """) { stmt ->
-            params.forEach { (index, value) ->
-                stmt.setObject(index, value)
-            }
-        } { rs ->
-            Transaction(
-                id = rs.getString("id"),
-                playerId = java.util.UUID.fromString(rs.getString("player_id")),
-                systemId = rs.getString("system_id"),
-                fromStation = rs.getString("from_station"),
-                toStation = rs.getString("to_station"),
-                amount = rs.getDouble("amount"),
-                type = TransactionType.valueOf(rs.getString("type")),
-                timestamp = LocalDateTime.parse(rs.getString("timestamp"))
-            )
         }
     }
 
@@ -164,19 +113,70 @@ class DatabaseManager(private val plugin: TransitPlugin) {
         }
     }
 
+    fun getTransactions(
+        systemId: String? = null,
+        playerId: UUID? = null,
+        startTime: LocalDateTime? = null,
+        endTime: LocalDateTime? = null
+    ): List<Transaction> {
+        val conditions = mutableListOf<String>()
+        val params = mutableListOf<Any>()
+
+        systemId?.let {
+            conditions.add("system_id = ?")
+            params.add(it)
+        }
+        playerId?.let {
+            conditions.add("player_id = ?")
+            params.add(it.toString())
+        }
+        startTime?.let {
+            conditions.add("timestamp >= ?")
+            params.add(it.toString())
+        }
+        endTime?.let {
+            conditions.add("timestamp <= ?")
+            params.add(it.toString())
+        }
+
+        val whereClause = if (conditions.isNotEmpty()) 
+            "WHERE ${conditions.joinToString(" AND ")}" else ""
+
+        val sql = """
+            SELECT * FROM ${getTableName("transactions")} 
+            $whereClause 
+            ORDER BY timestamp DESC
+        """
+
+        return executeQuery(sql, params) { rs ->
+            Transaction(
+                id = rs.getString("id"),
+                playerId = UUID.fromString(rs.getString("player_id")),
+                systemId = rs.getString("system_id"),
+                fromStation = rs.getString("from_station"),
+                toStation = rs.getString("to_station"),
+                amount = rs.getDouble("amount"),
+                type = TransactionType.valueOf(rs.getString("type")),
+                timestamp = LocalDateTime.parse(rs.getString("timestamp"))
+            )
+        }
+    }
+
     private fun <T> executeQuery(
         sql: String,
-        prepare: (java.sql.PreparedStatement) -> Unit = {},
-        map: (java.sql.ResultSet) -> T
+        params: List<Any> = emptyList(),
+        mapper: (java.sql.ResultSet) -> T
     ): List<T> {
         val results = mutableListOf<T>()
         try {
             dataSource?.connection?.use { conn ->
                 conn.prepareStatement(sql).use { stmt ->
-                    prepare(stmt)
+                    params.forEachIndexed { index, param ->
+                        stmt.setObject(index + 1, param)
+                    }
                     val rs = stmt.executeQuery()
                     while (rs.next()) {
-                        results.add(map(rs))
+                        results.add(mapper(rs))
                     }
                 }
             }

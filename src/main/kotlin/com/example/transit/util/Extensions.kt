@@ -1,5 +1,6 @@
 package com.example.transit.util
 
+import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.configuration.ConfigurationSection
 import java.text.DecimalFormat
@@ -15,7 +16,7 @@ fun String.toLocation(): Location? {
     
     return try {
         Location(
-            org.bukkit.Bukkit.getWorld(parts[0]),
+            Bukkit.getWorld(parts[0]),
             parts[1].toDouble(),
             parts[2].toDouble(),
             parts[3].toDouble(),
@@ -27,10 +28,6 @@ fun String.toLocation(): Location? {
     }
 }
 
-fun Double.format(decimals: Int = 2): String {
-    return DecimalFormat("#,##0.${"0".repeat(decimals)}").format(this)
-}
-
 fun ConfigurationSection.getLocationList(path: String): List<Location> {
     return getStringList(path).mapNotNull { it.toLocation() }
 }
@@ -40,4 +37,20 @@ fun Double.roundToDecimals(decimals: Int): Double {
     return (this * factor).roundToInt() / factor
 }
 
+fun Double.formatCurrency(): String {
+    return DecimalFormat("$#,##0.00").format(this)
+}
+
 private fun Double.pow(n: Int): Double = Math.pow(this, n.toDouble())
+
+fun String.sanitizeFileName(): String {
+    return this.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+}
+
+fun Location.distanceTo(other: Location): Double {
+    return if (world?.name == other.world?.name) {
+        distance(other)
+    } else {
+        Double.POSITIVE_INFINITY
+    }
+}

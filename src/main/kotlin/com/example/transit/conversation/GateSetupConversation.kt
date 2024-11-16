@@ -30,7 +30,7 @@ class GateSetupConversation(
         factory.buildConversation(player).begin()
     }
 
-    private inner class SystemPrompt : StringPrompt() {
+    private inner class SystemPrompt : ValidatingPrompt() {
         override fun getPromptText(context: ConversationContext): String {
             val systems = plugin.configManager.getSystems().map { it.id }
             return if (lastSystem != null) {
@@ -41,21 +41,24 @@ class GateSetupConversation(
             }
         }
 
-        override fun acceptInput(context: ConversationContext, input: String?): Prompt? {
-            val systemId = if (input.isNullOrBlank()) lastSystem else input
-            
-            if (systemId == null || !plugin.configManager.getTransitSystem(systemId)?.let { true } ?: false) {
-                context.forWhom.sendRawMessage("§cInvalid system ID!")
-                return this
-            }
+        override fun isInputValid(context: ConversationContext, input: String): Boolean {
+            val systemId = if (input.isEmpty()) lastSystem else input
+            return systemId?.let { plugin.configManager.getTransitSystem(it) != null } ?: false
+        }
 
+        override fun acceptValidatedInput(context: ConversationContext, input: String): Prompt {
+            val systemId = if (input.isEmpty()) lastSystem!! else input
             context.setSessionData("system", systemId)
             lastSystem = systemId
             return StationPrompt()
         }
+
+        override fun getFailedValidationText(context: ConversationContext, invalidInput: String): String {
+            return "§cInvalid system ID! Please try again."
+        }
     }
 
-    private inner class StationPrompt : StringPrompt() {
+    private inner class StationPrompt : ValidatingPrompt() {
         override fun getPromptText(context: ConversationContext): String {
             val systemId = context.getSessionData("system") as String
             val stations = plugin.stationManager.getSystemStations(systemId).map { it.name }
@@ -67,17 +70,17 @@ class GateSetupConversation(
             }
         }
 
-        override fun acceptInput(context: ConversationContext, input: String?): Prompt? {
+        override fun isInputValid(context: ConversationContext, input: String): Boolean {
             val systemId = context.getSessionData("system") as String
-            val stationId = if (input.isNullOrBlank()) lastStation else input
-            
-            if (stationId == null || !plugin.stationManager.getStation("${systemId}_${stationId.toLowerCase()}")?.let { true } ?: false) {
-                context.forWhom.sendRawMessage("§cInvalid station name!")
-                return this
-            }
+            val stationId = if (input.isEmpty()) lastStation else input
+            return stationId?.let { 
+                plugin.stationManager.getStation("${systemId}_${it.toLowerCase()}") != null 
+            } ?: false
+        }
 
-            context.setSessionData("station", stationId)
-            lastStation = stationId
+        override fun acceptValidatedInput(context: ConversationContext, input: String): Prompt? {
+            val systemId = context.getSessionData("system") as String
+            val stationId = if (input.isEmpty()) lastStation!! else input
             
             // Create the gate
             createGate(
@@ -86,7 +89,12 @@ class GateSetupConversation(
             )
             
             context.forWhom.sendRawMessage("§aFare gate created successfully!")
+            lastStation = stationId
             return null
+        }
+
+        override fun getFailedValidationText(context: ConversationContext, invalidInput: String): String {
+            return "§cInvalid station name! Please try again."
         }
     }
 
@@ -98,5 +106,16 @@ class GateSetupConversation(
             stationId = stationId
         )
         plugin.gateManager.registerGate(gate)
+        
+        // Update the sign text
+        val sign = location.block.state as? org.bukkit.block.Sign
+        sign?.let {
+            val station = plugin.stationManager.getStation(stationId)
+            it.setLine(0, "§1[Fare]")
+            it.setLine(1, station?.name ?: "Unknown Station")
+            it.setLine(2, "§aActive")
+            it.setLine(3, station?.zone ?: "")
+            it.update()
+        }
     }
 }

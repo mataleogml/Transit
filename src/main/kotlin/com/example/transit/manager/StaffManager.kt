@@ -6,7 +6,7 @@ import com.example.transit.model.StaffMember
 import com.example.transit.model.Transaction
 import com.example.transit.model.TransactionType
 import org.bukkit.configuration.file.YamlConfiguration
-import org.bukkit.scheduler.BukkitRunnable
+import org.bukkit.entity.Player
 import java.io.File
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
@@ -17,18 +17,25 @@ class StaffManager(private val plugin: TransitPlugin) {
     private val staffMembers = ConcurrentHashMap<String, MutableSet<StaffMember>>()
     private val staffFile = File(plugin.dataFolder, "staff.yml")
     private val config = YamlConfiguration.loadConfiguration(staffFile)
+    private val pendingPayments = ConcurrentHashMap<UUID, MutableList<Payment>>()
 
     init {
         loadStaffData()
         startPaymentScheduler()
     }
 
+    fun getSystemStaff(systemId: String): Set<StaffMember> {
+        return staffMembers[systemId]?.toSet() ?: emptySet()
+    }
+
     fun addStaffMember(
         playerId: UUID,
         systemId: String,
         salary: Double,
-        period: PaymentPeriod
+        period: PaymentPeriod = PaymentPeriod.MONTHLY
     ): Boolean {
+        if (isStaff(playerId, systemId)) return false
+
         val staffMember = StaffMember(
             playerId = playerId,
             systemId = systemId,
@@ -42,19 +49,38 @@ class StaffManager(private val plugin: TransitPlugin) {
     }
 
     fun removeStaffMember(playerId: UUID, systemId: String): Boolean {
-        return staffMembers[systemId]?.removeIf { it.playerId == playerId } == true
+        return staffMembers[systemId]?.removeIf { 
+            it.playerId == playerId 
+        }?.also { 
+            if (it) saveStaffData() 
+        } ?: false
     }
 
     fun isStaff(playerId: UUID, systemId: String): Boolean {
-        return staffMembers[systemId]?.any { it.playerId == playerId } == true
+        return staffMembers[systemId]?.any { it.playerId == playerId } ?: false
+    }
+
+    fun isStaffAnywhere(playerId: UUID): Boolean {
+        return staffMembers.values.any { members ->
+            members.any { it.playerId == playerId }
+        }
+    }
+
+    fun updateSalary(playerId: UUID, systemId: String, newSalary: Double): Boolean {
+        staffMembers[systemId]?.find { it.playerId == playerId }?.let { member ->
+            val updatedMember = member.copy(salary = newSalary)
+            staffMembers[systemId]?.remove(member)
+            staffMembers[systemId]?.add(updatedMember)
+            saveStaffMember(updatedMember)
+            return true
+        }
+        return false
     }
 
     private fun startPaymentScheduler() {
-        object : BukkitRunnable() {
-            override fun run() {
-                processPayments()
-            }
-        }.runTaskTimer(plugin, 72000L, 72000L) // Check every hour
+        plugin.server.scheduler.runTaskTimer(plugin, Runnable {
+            processPayments()
+        }, 72000L, 72000L) // Check every hour
     }
 
     private fun processPayments() {
@@ -78,35 +104,62 @@ class StaffManager(private val plugin: TransitPlugin) {
     }
 
     private fun processStaffPayment(staffMember: StaffMember, systemId: String) {
+        val player = plugin.server.getPlayer(staffMember.playerId)
+        
+        if (player != null && player.isOnline) {
+            payStaff(player, staffMember, systemId)
+        } else {
+            queuePayment(staffMember)
+        }
+    }
+
+    private fun payStaff(player: Player, staffMember: StaffMember, systemId: String) {
         val systemBalance = plugin.transactionManager.getSystemBalance(systemId)
         if (systemBalance < staffMember.salary) {
             plugin.logger.warning("Insufficient system balance for staff payment: $systemId")
             return
         }
 
-        val player = plugin.server.getOfflinePlayer(staffMember.playerId)
-        plugin.economy.depositPlayer(player, staffMember.salary)
-
-        // Log transaction
-        plugin.transactionManager.logTransaction(
-            Transaction(
-                playerId = staffMember.playerId,
-                systemId = systemId,
-                fromStation = "STAFF_PAYMENT",
-                toStation = null,
-                amount = staffMember.salary,
-                type = TransactionType.STAFF_PAYMENT
+        if (plugin.economy.depositPlayer(player, staffMember.salary).transactionSuccess()) {
+            plugin.transactionManager.logTransaction(
+                Transaction(
+                    playerId = staffMember.playerId,
+                    systemId = systemId,
+                    fromStation = "STAFF_PAYMENT",
+                    toStation = null,
+                    amount = staffMember.salary,
+                    type = TransactionType.STAFF_PAYMENT
+                )
             )
-        )
 
-        // Update last paid time
-        updateLastPaidTime(staffMember)
+            updateLastPaidTime(staffMember)
+            player.sendMessage("§aReceived staff payment: $${staffMember.salary} for system $systemId")
+        }
+    }
 
-        // Notify if online
-        plugin.server.getPlayer(staffMember.playerId)?.let { onlinePlayer ->
-            onlinePlayer.sendMessage(
-                "§aReceived staff payment: $${staffMember.salary} for system $systemId"
-            )
+    private fun queuePayment(staffMember: StaffMember) {
+        pendingPayments.getOrPut(staffMember.playerId) { mutableListOf() }
+            .add(Payment(staffMember.systemId, staffMember.salary))
+    }
+
+    fun checkPendingPayments(player: Player) {
+        pendingPayments[player.uniqueId]?.let { payments ->
+            payments.forEach { payment ->
+                if (plugin.economy.depositPlayer(player, payment.amount).transactionSuccess()) {
+                    plugin.transactionManager.logTransaction(
+                        Transaction(
+                            playerId = player.uniqueId,
+                            systemId = payment.systemId,
+                            fromStation = "STAFF_PAYMENT_DELAYED",
+                            toStation = null,
+                            amount = payment.amount,
+                            type = TransactionType.STAFF_PAYMENT
+                        )
+                    )
+                    player.sendMessage("§aReceived pending staff payment: $${payment.amount}")
+                }
+            }
+            pendingPayments.remove(player.uniqueId)
         }
     }
 
@@ -114,30 +167,31 @@ class StaffManager(private val plugin: TransitPlugin) {
         staffMembers[staffMember.systemId]?.let { members ->
             members.remove(staffMember)
             members.add(staffMember.copy(lastPaid = LocalDateTime.now()))
+            saveStaffData()
         }
-        saveStaffData()
     }
 
     private fun loadStaffData() {
-        if (config.contains("staff")) {
-            config.getConfigurationSection("staff")?.getKeys(false)?.forEach { systemId ->
-                val members = mutableSetOf<StaffMember>()
-                config.getConfigurationSection("staff.$systemId")?.getKeys(false)?.forEach { playerIdStr ->
-                    val section = config.getConfigurationSection("staff.$systemId.$playerIdStr")
-                    section?.let {
-                        members.add(
-                            StaffMember(
-                                playerId = UUID.fromString(playerIdStr),
-                                systemId = systemId,
-                                salary = it.getDouble("salary"),
-                                paymentPeriod = PaymentPeriod.valueOf(it.getString("period", "MONTHLY")),
-                                lastPaid = LocalDateTime.parse(it.getString("lastPaid"))
-                            )
+        if (!config.contains("staff")) return
+        
+        config.getConfigurationSection("staff")?.getKeys(false)?.forEach { systemId ->
+            val members = mutableSetOf<StaffMember>()
+            config.getConfigurationSection("staff.$systemId")?.getKeys(false)?.forEach { playerIdStr ->
+                val section = config.getConfigurationSection("staff.$systemId.$playerIdStr")
+                section?.let {
+                    members.add(
+                        StaffMember(
+                            playerId = UUID.fromString(playerIdStr),
+                            systemId = systemId,
+                            salary = it.getDouble("salary"),
+                            paymentPeriod = PaymentPeriod.valueOf(it.getString("period", "MONTHLY")!!),
+                            lastPaid = LocalDateTime.parse(it.getString("lastPaid") 
+                                ?: LocalDateTime.now().toString())
                         )
-                    }
+                    )
                 }
-                staffMembers[systemId] = members
             }
+            staffMembers[systemId] = members
         }
     }
 
@@ -149,7 +203,8 @@ class StaffManager(private val plugin: TransitPlugin) {
         saveConfig()
     }
 
-    fun saveAll() {
+    fun saveStaffData() {
+        config.set("staff", null) // Clear existing data
         staffMembers.forEach { (systemId, members) ->
             members.forEach { staffMember ->
                 saveStaffMember(staffMember)
@@ -164,4 +219,9 @@ class StaffManager(private val plugin: TransitPlugin) {
             plugin.logger.severe("Failed to save staff data: ${e.message}")
         }
     }
+
+    private data class Payment(
+        val systemId: String,
+        val amount: Double
+    )
 }
