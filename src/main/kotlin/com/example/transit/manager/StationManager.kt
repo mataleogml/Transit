@@ -121,6 +121,11 @@ class StationManager(private val plugin: TransitPlugin) {
         stations.values.forEach { saveStation(it) }
     }
 
+    fun reload() {
+        stations.clear()
+        loadStations()
+    }
+
     private fun saveConfig() {
         try {
             config.save(stationsFile)

@@ -14,7 +14,7 @@ class FareCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCompl
             return true
         }
 
-        when (args[0].toLowerCase()) {
+        when (args[0].lowercase()) {
             "refund" -> handleRefund(sender, args)
             else -> handleSystemBalance(sender, args[0])
         }
@@ -43,7 +43,7 @@ class FareCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCompl
         if (args.isEmpty()) return emptyList()
         
         return when (args.size) {
-            1 -> listOf("refund").filter { it.startsWith(args[0].toLowerCase()) }
+            1 -> listOf("refund").filter { it.startsWith(args[0].lowercase()) }
             else -> emptyList()
         }
     }

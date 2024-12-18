@@ -23,7 +23,7 @@ class StaffCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
             return true
         }
 
-        when (args[0].toLowerCase()) {
+        when (args[0].lowercase()) {
             "list" -> handleList(sender, args)
             "add" -> handleAdd(sender, args)
             "remove" -> handleRemove(sender, args)
@@ -193,7 +193,7 @@ class StaffCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
         }
 
         val systemId = args[2]
-        when (args[1].toLowerCase()) {
+        when (args[1].lowercase()) {
             "start" -> {
                 if (plugin.staffManager.startShift(sender.uniqueId, systemId)) {
                     sender.sendMessage("§aShift started successfully!")
@@ -284,24 +284,24 @@ class StaffCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
     ): List<String> {
         return when (args.size) {
             1 -> listOf("list", "add", "remove", "role", "shift", "performance", "salary")
-                .filter { it.startsWith(args[0].toLowerCase()) }
-            2 -> when (args[0].toLowerCase()) {
+                .filter { it.startsWith(args[0].lowercase()) }
+            2 -> when (args[0].lowercase()) {
                 "list", "add", "remove", "role", "salary" -> 
                     plugin.configManager.getSystems().map { it.id }
                 "shift" -> listOf("start", "end")
                 "performance" -> plugin.server.onlinePlayers.map { it.name }
                 else -> emptyList()
-            }.filter { it.startsWith(args[1].toLowerCase()) }
-            3 -> when (args[0].toLowerCase()) {
+            }.filter { it.startsWith(args[1].lowercase()) }
+            3 -> when (args[0].lowercase()) {
                 "add", "remove", "role", "salary" -> 
                     plugin.server.onlinePlayers.map { it.name }
                 "shift" -> plugin.configManager.getSystems().map { it.id }
                 else -> emptyList()
-            }.filter { it.startsWith(args[2].toLowerCase()) }
-            4 -> when (args[0].toLowerCase()) {
-                "role" -> StaffRole.values().map { it.name.toLowerCase() }
+            }.filter { it.startsWith(args[2].lowercase()) }
+            4 -> when (args[0].lowercase()) {
+                "role" -> StaffRole.values().map { it.name.lowercase() }
                 else -> emptyList()
-            }.filter { it.startsWith(args[3].toLowerCase()) }
+            }.filter { it.startsWith(args[3].lowercase()) }
             else -> emptyList()
         }
     }

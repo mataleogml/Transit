@@ -15,6 +15,18 @@ class TransactionManager(private val plugin: TransitPlugin) {
     private val systemBalances = ConcurrentHashMap<String, Double>()
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM")
     
+    init {
+        loadTransactions()
+        loadSystemBalances()
+    }
+    
+    fun reload() {
+        transactions.clear()
+        systemBalances.clear()
+        loadTransactions()
+        loadSystemBalances()
+    }
+
     fun logTransaction(transaction: Transaction) {
         transactions[transaction.id] = transaction
         updateSystemBalance(transaction)
@@ -68,6 +80,47 @@ class TransactionManager(private val plugin: TransitPlugin) {
         val folder = File(plugin.dataFolder, "transactions")
         if (!folder.exists()) folder.mkdirs()
         return File(folder, "$month.yml")
+    }
+
+    private fun loadTransactions() {
+        val folder = File(plugin.dataFolder, "transactions")
+        if (!folder.exists()) return
+
+        folder.listFiles { file -> file.name.endsWith(".yml") }?.forEach { file ->
+            val config = YamlConfiguration.loadConfiguration(file)
+            
+            for (id in config.getKeys(false)) {
+                val section = config.getConfigurationSection(id) ?: continue
+                try {
+                    val transaction = Transaction(
+                        id = id,
+                        playerId = UUID.fromString(section.getString("playerId") ?: continue),
+                        systemId = section.getString("systemId") ?: continue,
+                        fromStation = section.getString("fromStation") ?: "",  // Default to empty string if null
+                        toStation = section.getString("toStation"),  // Can be null
+                        amount = section.getDouble("amount"),
+                        type = TransactionType.valueOf(section.getString("type") ?: TransactionType.ENTRY.name),
+                        timestamp = LocalDateTime.parse(section.getString("timestamp") ?: continue)
+                    )
+                    transactions[id] = transaction
+                    updateSystemBalance(transaction)
+                } catch (e: Exception) {
+                    plugin.logger.severe("Failed to load transaction $id: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun loadSystemBalances() {
+        val file = File(plugin.dataFolder, "balances.yml")
+        if (!file.exists()) return
+        
+        val config = YamlConfiguration.loadConfiguration(file)
+        val balancesSection = config.getConfigurationSection("balances") ?: return
+        
+        for (systemId in balancesSection.getKeys(false)) {
+            systemBalances[systemId] = balancesSection.getDouble(systemId)
+        }
     }
 
     private fun updateStatistics(transaction: Transaction) {

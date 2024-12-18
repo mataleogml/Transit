@@ -17,7 +17,7 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
             return true
         }
 
-        when (args[0].toLowerCase()) {
+        when (args[0].lowercase()) {
             "create" -> handleCreate(sender, args)
             "staff" -> handleStaff(sender, args)
             "stat" -> handleStats(sender, args)
@@ -75,7 +75,7 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
         }
 
         val systemId = args[2]
-        when (args[1].toLowerCase()) {
+        when (args[1].lowercase()) {
             "add" -> {
                 if (args.size < 4) {
                     sender.sendMessage("§cUsage: /transit staff add <system> <player> [salary] [role]")
@@ -165,7 +165,7 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
             }
         } else StatisticsPeriod.ALL_TIME
 
-        when (args[1].toLowerCase()) {
+        when (args[1].lowercase()) {
             "system" -> {
                 val systemId = args[2]
                 val stats = plugin.statisticsManager.getSystemStatistics(systemId, period)
@@ -196,7 +196,7 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
             return
         }
 
-        when (args[1].toLowerCase()) {
+        when (args[1].lowercase()) {
             "reload" -> {
                 plugin.reloadConfig()
                 sender.sendMessage("§aConfiguration reloaded successfully!")
@@ -261,28 +261,28 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
     ): List<String> {
         return when (args.size) {
             1 -> listOf("create", "staff", "stat", "config", "info")
-                .filter { it.startsWith(args[0].toLowerCase()) }
-            2 -> when (args[0].toLowerCase()) {
+                .filter { it.startsWith(args[0].lowercase()) }
+            2 -> when (args[0].lowercase()) {
                 "staff" -> listOf("add", "remove", "list")
                 "stat" -> listOf("system", "station", "route")
                 "config" -> listOf("reload", "save")
                 "info", "stat" -> plugin.configManager.getSystems().map { it.id }
                 else -> emptyList()
-            }.filter { it.startsWith(args[1].toLowerCase()) }
+            }.filter { it.startsWith(args[1].lowercase()) }
             3 -> when {
                 args[0].equals("staff", true) -> plugin.configManager.getSystems().map { it.id }
-                args[0].equals("stat", true) -> when (args[1].toLowerCase()) {
+                args[0].equals("stat", true) -> when (args[1].lowercase()) {
                     "system" -> plugin.configManager.getSystems().map { it.id }
                     "station" -> plugin.stationManager.getAllStations().map { it.id }
                     "route" -> plugin.routeManager.getRoutes()
                     else -> emptyList()
                 }
                 else -> emptyList()
-            }.filter { it.startsWith(args[2].toLowerCase()) }
+            }.filter { it.startsWith(args[2].lowercase()) }
             4 -> when {
                 args[0].equals("stat", true) -> StatisticsPeriod.values()
-                    .map { it.name.toLowerCase() }
-                    .filter { it.startsWith(args[3].toLowerCase()) }
+                    .map { it.name.lowercase() }
+                    .filter { it.startsWith(args[3].lowercase()) }
                 else -> emptyList()
             }
             else -> emptyList()

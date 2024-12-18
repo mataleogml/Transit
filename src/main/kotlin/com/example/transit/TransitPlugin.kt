@@ -124,29 +124,33 @@ class TransitPlugin : JavaPlugin() {
         }, saveInterval, saveInterval)
     }
 
-fun reload() {
-    reloadConfig()
-    configManager.reload()
-    stationManager.reload()
-    routeManager.reload()
-    fareManager.reload()
-    statisticsManager.reload()
-    staffManager.reload()
-    gateManager.reload()
-}
 
-    fun reloadPlugin() {
-        reloadConfig()
-        configManager.reloadConfig()
-        
-        // Reload all managers
-        stationManager.reload()
-        routeManager.reload()
-        gateManager.reload()
-        staffManager.reload()
-        statisticsManager.reload()
-        
-        logger.info("Transit plugin reloaded successfully!")
+    fun reload() {
+        try {
+            // Reload config first
+            reloadConfig()
+            
+            // Reload all managers
+            configManager.reloadConfig()
+            stationManager.reload()
+            routeManager.reload()
+            fareManager.reload()
+            gateManager.reload()
+            staffManager.reload()
+            statisticsManager.reload()
+            transactionManager.reload()
+            
+            // Cancel and restart scheduled tasks
+            server.scheduler.cancelTasks(this)
+            startAutoSave()
+            
+            logger.info("Transit plugin reloaded successfully!")
+        } catch (e: Exception) {
+            logger.severe("Failed to reload Transit plugin: ${e.message}")
+            if (config.getBoolean("settings.debug", false)) {
+                e.printStackTrace()
+            }
+        }
     }
 
     private fun saveAllData() {

@@ -18,7 +18,7 @@ class TransitAPI(private val plugin: TransitPlugin) {
     }
 
     fun getStation(systemId: String, stationName: String): Station? {
-        return plugin.stationManager.getStation("${systemId}_${stationName.toLowerCase()}")
+        return plugin.stationManager.getStation("${systemId}_${stationName.lowercase()}")
     }
 
     fun getRoute(routeId: String): Route? {
@@ -55,7 +55,7 @@ class TransitAPI(private val plugin: TransitPlugin) {
         zone: String = "1"
     ): Boolean {
         val station = Station(
-            id = "${systemId}_${name.toLowerCase()}",
+            id = "${systemId}_${name.lowercase()}",
             name = name,
             systemId = systemId,
             location = location,
@@ -74,7 +74,7 @@ class TransitAPI(private val plugin: TransitPlugin) {
     }
 
     fun removeStation(systemId: String, stationName: String): Boolean {
-        val stationId = "${systemId}_${stationName.toLowerCase()}"
+        val stationId = "${systemId}_${stationName.lowercase()}"
         return plugin.stationManager.removeStation(stationId)
     }
 

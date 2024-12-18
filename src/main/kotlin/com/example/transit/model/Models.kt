@@ -12,10 +12,10 @@ enum class FareType {
     DISTANCE
 }
 
-enum class PaymentPeriod {
-    DAILY,
-    WEEKLY,
-    MONTHLY
+enum class PaymentPeriod(val days: Int) {
+    DAILY(1),
+    WEEKLY(7),
+    MONTHLY(30)
 }
 
 enum class StationStatus {

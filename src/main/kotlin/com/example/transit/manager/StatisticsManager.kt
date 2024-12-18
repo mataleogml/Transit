@@ -1,285 +1,174 @@
-package com.example.transit.command
+package com.example.transit.statistics
 
 import com.example.transit.TransitPlugin
-import com.example.transit.statistics.StatisticsManager.StatisticsPeriod
-import org.bukkit.command.Command
-import org.bukkit.command.CommandExecutor
-import org.bukkit.command.CommandSender
-import org.bukkit.command.TabCompleter
+import com.example.transit.model.Transaction
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
+import java.time.LocalDateTime
+import org.bukkit.configuration.file.YamlConfiguration
+import java.io.File
 
-class StatisticsCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCompleter {
-    
-    private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+class StatisticsManager(private val plugin: TransitPlugin) {
 
-    override fun onCommand(
-        sender: CommandSender,
-        command: Command,
-        label: String,
-        args: Array<out String>
-    ): Boolean {
-        if (!sender.hasPermission("transit.stats")) {
-            sender.sendMessage("§cYou don't have permission to view statistics!")
-            return true
-        }
+    private val statisticsCache = mutableMapOf<String, Statistics>()
+    private val statisticsFile = File(plugin.dataFolder, "statistics.yml")
+    private val config = YamlConfiguration.loadConfiguration(statisticsFile)
 
-        if (args.isEmpty()) {
-            sendHelp(sender)
-            return true
-        }
-
-        when (args[0].toLowerCase()) {
-            "system" -> handleSystemStats(sender, args)
-            "station" -> handleStationStats(sender, args)
-            "route" -> handleRouteStats(sender, args)
-            "report" -> handleReport(sender, args)
-            "peaks" -> handlePeakTimes(sender, args)
-            "export" -> handleExport(sender, args)
-            else -> sendHelp(sender)
-        }
-        return true
+    fun reload() {
+        statisticsCache.clear()
+        loadStatistics()
     }
 
-    private fun handleSystemStats(sender: CommandSender, args: Array<out String>) {
-        if (args.size < 2) {
-            sender.sendMessage("§cUsage: /stats system <systemId> [period]")
-            return
-        }
-
-        val systemId = args[1]
-        val period = if (args.size > 2) {
-            try {
-                StatisticsPeriod.valueOf(args[2].uppercase())
-            } catch (e: IllegalArgumentException) {
-                StatisticsPeriod.ALL_TIME
-            }
-        } else StatisticsPeriod.ALL_TIME
-
-        val stats = plugin.statisticsManager.getSystemStatistics(systemId, period)
-        if (stats == null) {
-            sender.sendMessage("§cNo statistics found for system $systemId")
-            return
-        }
-
-        sender.sendMessage("""
-            §6System Statistics - $systemId ($period)
-            §7Revenue: §f$${stats.totalRevenue}
-            §7Transactions: §f${stats.totalTransactions}
-            §7Average Fare: §f$${stats.averageFare}
-            §7Entry Count: §f${stats.entryCount}
-            §7Exit Count: §f${stats.exitCount}
-            §7Direct Fares: §f${stats.directFares}
-            §7Last Updated: §f${stats.lastUpdated}
-            
-            §6Hourly Breakdown:
-            ${formatHourlyStats(stats.hourlyStats)}
-        """.trimIndent())
+    fun saveAll() {
+        statisticsCache.forEach { (id, stats) -> saveStatistics(id, stats) }
     }
 
-    private fun handleStationStats(sender: CommandSender, args: Array<out String>) {
-        if (args.size < 2) {
-            sender.sendMessage("§cUsage: /stats station <stationId> [period]")
-            return
-        }
-
-        val stationId = args[1]
-        val period = if (args.size > 2) {
-            try {
-                StatisticsPeriod.valueOf(args[2].uppercase())
-            } catch (e: IllegalArgumentException) {
-                StatisticsPeriod.ALL_TIME
-            }
-        } else StatisticsPeriod.ALL_TIME
-
-        val stats = plugin.statisticsManager.getStationStatistics(stationId, period)
-        if (stats == null) {
-            sender.sendMessage("§cNo statistics found for station $stationId")
-            return
-        }
-
-        val station = plugin.stationManager.getStation(stationId)
-        sender.sendMessage("""
-            §6Station Statistics - ${station?.name ?: stationId} ($period)
-            §7Revenue: §f$${stats.totalRevenue}
-            §7Transactions: §f${stats.totalTransactions}
-            §7Average Fare: §f$${stats.averageFare}
-            §7Entry Count: §f${stats.entryCount}
-            §7Exit Count: §f${stats.exitCount}
-            §7Last Updated: §f${stats.lastUpdated}
-            
-            §6Hourly Usage:
-            ${formatHourlyStats(stats.hourlyStats)}
-        """.trimIndent())
+    fun getSystemStatistics(systemId: String, period: StatisticsPeriod = StatisticsPeriod.ALL_TIME): Statistics? {
+        return statisticsCache["system_$systemId"]
     }
 
-    private fun handleRouteStats(sender: CommandSender, args: Array<out String>) {
-        if (args.size < 2) {
-            sender.sendMessage("§cUsage: /stats route <routeId> [period]")
-            return
-        }
-
-        val routeId = args[1]
-        val period = if (args.size > 2) {
-            try {
-                StatisticsPeriod.valueOf(args[2].uppercase())
-            } catch (e: IllegalArgumentException) {
-                StatisticsPeriod.ALL_TIME
-            }
-        } else StatisticsPeriod.ALL_TIME
-
-        val stats = plugin.statisticsManager.getRouteStatistics(routeId, period)
-        if (stats == null) {
-            sender.sendMessage("§cNo statistics found for route $routeId")
-            return
-        }
-
-        val route = plugin.routeManager.getRoute(routeId)
-        sender.sendMessage("""
-            §6Route Statistics - ${route?.name ?: routeId} ($period)
-            §7Revenue: §f$${stats.totalRevenue}
-            §7Transactions: §f${stats.totalTransactions}
-            §7Average Fare: §f$${stats.averageFare}
-            §7Last Updated: §f${stats.lastUpdated}
-            
-            §6Hourly Usage:
-            ${formatHourlyStats(stats.hourlyStats)}
-        """.trimIndent())
+    fun getStationStatistics(stationId: String, period: StatisticsPeriod = StatisticsPeriod.ALL_TIME): Statistics? {
+        return statisticsCache["station_$stationId"]
     }
 
-    private fun handleReport(sender: CommandSender, args: Array<out String>) {
-        if (args.size < 4) {
-            sender.sendMessage("§cUsage: /stats report <systemId> <startDate> <endDate>")
-            sender.sendMessage("§cDate format: YYYY-MM-DD")
-            return
-        }
+    fun getRouteStatistics(routeId: String, period: StatisticsPeriod = StatisticsPeriod.ALL_TIME): Statistics? {
+        return statisticsCache["route_$routeId"]
+    }
 
-        val systemId = args[1]
-        val startDate = try {
-            LocalDate.parse(args[2], dateFormat)
-        } catch (e: DateTimeParseException) {
-            sender.sendMessage("§cInvalid start date format. Use YYYY-MM-DD")
-            return
-        }
-
-        val endDate = try {
-            LocalDate.parse(args[3], dateFormat)
-        } catch (e: DateTimeParseException) {
-            sender.sendMessage("§cInvalid end date format. Use YYYY-MM-DD")
-            return
-        }
-
-        val report = plugin.statisticsManager.generateReport(systemId, startDate, endDate)
+    fun updateStatistics(transaction: Transaction) {
+        // Update system statistics
+        updateEntityStatistics("system_${transaction.systemId}", transaction)
         
-        sender.sendMessage("""
-            §6System Report - $systemId
-            §7Period: §f${report.period.startDate} to ${report.period.endDate}
-            
-            §6Overall Statistics:
-            §7Total Revenue: §f$${report.totalRevenue}
-            §7Total Transactions: §f${report.totalTransactions}
-            §7Average Transaction: §f$${report.averageTransactionValue}
-            
-            §6Peak Hours:
-            ${report.peakHours.joinToString("\n") { 
-                "§7${it.hour}:00 - ${it.hour + 1}:00: §f${it.transactions} transactions"
-            }}
-            
-            §6Busiest Stations:
-            ${report.busyStations.take(5).joinToString("\n") { 
-                "§7${it.name}: §f${it.usageCount} uses"
-            }}
-            
-            §6Popular Routes:
-            ${report.popularRoutes.take(5).joinToString("\n") { 
-                "§7${formatRoute(it)}: §f${it.usageCount} trips (avg: $${it.averageFare})"
-            }}
-        """.trimIndent())
-    }
-
-    private fun handlePeakTimes(sender: CommandSender, args: Array<out String>) {
-        if (args.size < 2) {
-            sender.sendMessage("§cUsage: /stats peaks <systemId>")
-            return
-        }
-
-        val systemId = args[1]
-        val peakHours = plugin.statisticsManager.getPeakHours(systemId)
-        
-        if (peakHours.isEmpty()) {
-            sender.sendMessage("§cNo peak time data available for system $systemId")
-            return
-        }
-
-        sender.sendMessage("§6Peak Hours for $systemId:")
-        peakHours.forEach { peak ->
-            sender.sendMessage("§7${peak.hour}:00 - ${peak.hour + 1}:00: §f${peak.transactions} transactions")
+        // Update station statistics
+        updateEntityStatistics("station_${transaction.fromStation}", transaction)
+        if (transaction.toStation != null) {
+            updateEntityStatistics("station_${transaction.toStation}", transaction)
         }
     }
 
-    private fun handleExport(sender: CommandSender, args: Array<out String>) {
-        if (args.size < 3) {
-            sender.sendMessage("§cUsage: /stats export <systemId> <type>")
-            sender.sendMessage("§cTypes: csv, json")
-            return
-        }
-
-        sender.sendMessage("§cExport functionality not yet implemented")
-        // TODO: Implement export functionality
+    fun generateReport(systemId: String, startDate: LocalDate, endDate: LocalDate): Report {
+        // Implementation for generating reports
+        return Report(
+            period = ReportPeriod(startDate, endDate),
+            totalRevenue = 0.0,
+            totalTransactions = 0,
+            averageTransactionValue = 0.0,
+            peakHours = listOf(),
+            busyStations = listOf(),
+            popularRoutes = listOf()
+        )
     }
 
-    private fun formatHourlyStats(stats: Map<Int, Int>): String {
-        return stats.entries
-            .sortedBy { it.key }
-            .joinToString("\n") { (hour, count) ->
-                "§7${hour}:00 - ${hour + 1}:00: §f$count"
+    fun getPeakHours(systemId: String): List<PeakHour> {
+        return statisticsCache["system_$systemId"]?.hourlyStats?.map { 
+            PeakHour(it.key, it.value)
+        }?.sortedByDescending { it.transactions } ?: listOf()
+    }
+
+    private fun updateEntityStatistics(entityId: String, transaction: Transaction) {
+        val stats = statisticsCache.getOrPut(entityId) { Statistics() }
+        stats.apply {
+            totalRevenue += transaction.amount
+            totalTransactions++
+            lastUpdated = LocalDateTime.now()
+            
+            val hour = transaction.timestamp.hour
+            hourlyStats[hour] = hourlyStats.getOrDefault(hour, 0) + 1
+        }
+        saveStatistics(entityId, stats)
+    }
+
+    private fun loadStatistics() {
+        for (entityId in config.getKeys(false)) {
+            val section = config.getConfigurationSection(entityId) ?: continue
+            try {
+                statisticsCache[entityId] = Statistics(
+                    totalRevenue = section.getDouble("totalRevenue"),
+                    totalTransactions = section.getInt("totalTransactions"),
+                    entryCount = section.getInt("entryCount"),
+                    exitCount = section.getInt("exitCount"),
+                    directFares = section.getInt("directFares"),
+                    lastUpdated = LocalDateTime.parse(section.getString("lastUpdated") 
+                        ?: LocalDateTime.now().toString()),
+                    hourlyStats = section.getConfigurationSection("hourlyStats")?.let { hourlySection ->
+                        hourlySection.getKeys(false).associate {
+                            it.toInt() to hourlySection.getInt(it)
+                        }.toMutableMap()
+                    } ?: mutableMapOf()
+                )
+            } catch (e: Exception) {
+                plugin.logger.severe("Failed to load statistics for $entityId: ${e.message}")
             }
-    }
-
-    private fun formatRoute(route: StatisticsManager.PopularRoute): String {
-        val fromStation = plugin.stationManager.getStation(route.fromStationId)?.name ?: route.fromStationId
-        val toStation = plugin.stationManager.getStation(route.toStationId)?.name ?: route.toStationId
-        return "$fromStation → $toStation"
-    }
-
-    override fun onTabComplete(
-        sender: CommandSender,
-        command: Command,
-        alias: String,
-        args: Array<out String>
-    ): List<String> {
-        return when (args.size) {
-            1 -> listOf("system", "station", "route", "report", "peaks", "export")
-                .filter { it.startsWith(args[0].toLowerCase()) }
-            2 -> when (args[0].toLowerCase()) {
-                "system", "report", "peaks" -> plugin.configManager.getSystems().map { it.id }
-                "station" -> plugin.stationManager.getAllStations().map { it.id }
-                "route" -> plugin.routeManager.getRoutes()
-                "export" -> plugin.configManager.getSystems().map { it.id }
-                else -> emptyList()
-            }.filter { it.startsWith(args[1].toLowerCase()) }
-            3 -> when (args[0].toLowerCase()) {
-                "system", "station", "route" -> 
-                    StatisticsPeriod.values().map { it.name.toLowerCase() }
-                "export" -> listOf("csv", "json")
-                else -> emptyList()
-            }.filter { it.startsWith(args[2].toLowerCase()) }
-            else -> emptyList()
         }
     }
 
-    private fun sendHelp(sender: CommandSender) {
-        sender.sendMessage("""
-            §6Statistics Commands:
-            §f/stats system <systemId> [period] - View system statistics
-            §f/stats station <stationId> [period] - View station statistics
-            §f/stats route <routeId> [period] - View route statistics
-            §f/stats report <systemId> <startDate> <endDate> - Generate detailed report
-            §f/stats peaks <systemId> - View peak usage times
-            §f/stats export <systemId> <type> - Export statistics
-            
-            §7Periods: daily, weekly, monthly, all_time
-        """.trimIndent())
+    private fun saveStatistics(entityId: String, stats: Statistics) {
+        config.set("$entityId.totalRevenue", stats.totalRevenue)
+        config.set("$entityId.totalTransactions", stats.totalTransactions)
+        config.set("$entityId.entryCount", stats.entryCount)
+        config.set("$entityId.exitCount", stats.exitCount)
+        config.set("$entityId.directFares", stats.directFares)
+        config.set("$entityId.lastUpdated", stats.lastUpdated.toString())
+        
+        stats.hourlyStats.forEach { (hour, count) ->
+            config.set("$entityId.hourlyStats.$hour", count)
+        }
+        
+        try {
+            config.save(statisticsFile)
+        } catch (e: Exception) {
+            plugin.logger.severe("Failed to save statistics: ${e.message}")
+        }
+    }
+
+    data class Statistics(
+        var totalRevenue: Double = 0.0,
+        var totalTransactions: Int = 0,
+        var entryCount: Int = 0,
+        var exitCount: Int = 0,
+        var directFares: Int = 0,
+        var lastUpdated: LocalDateTime = LocalDateTime.now(),
+        var hourlyStats: MutableMap<Int, Int> = mutableMapOf()
+    ) {
+        val averageFare: Double
+            get() = if (totalTransactions > 0) totalRevenue / totalTransactions else 0.0
+    }
+
+    data class Report(
+        val period: ReportPeriod,
+        val totalRevenue: Double,
+        val totalTransactions: Int,
+        val averageTransactionValue: Double,
+        val peakHours: List<PeakHour>,
+        val busyStations: List<BusyStation>,
+        val popularRoutes: List<PopularRoute>
+    )
+
+    data class ReportPeriod(
+        val startDate: LocalDate,
+        val endDate: LocalDate
+    )
+
+    data class PeakHour(
+        val hour: Int,
+        val transactions: Int
+    )
+
+    data class BusyStation(
+        val name: String,
+        val usageCount: Int
+    )
+
+    data class PopularRoute(
+        val fromStationId: String,
+        val toStationId: String,
+        val usageCount: Int,
+        val averageFare: Double
+    )
+
+    enum class StatisticsPeriod {
+        DAILY,
+        WEEKLY,
+        MONTHLY,
+        ALL_TIME
     }
 }

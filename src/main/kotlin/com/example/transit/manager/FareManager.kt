@@ -15,13 +15,23 @@ class FareManager(
 ) {
     private val activeTaps = ConcurrentHashMap<UUID, TapData>()
     private val activeJourneys = ConcurrentHashMap<UUID, JourneyData>()
-    private val zoneFareCalculator = ZoneFareCalculator(plugin.config.getConfigurationSection("systems") 
-        ?: throw IllegalStateException("Missing systems configuration"))
+    private var zoneFareCalculator: ZoneFareCalculator = ZoneFareCalculator(
+        plugin.config.getConfigurationSection("systems") 
+            ?: throw IllegalStateException("Missing systems configuration")
+    )
     
     fun getActiveJourney(playerId: UUID): JourneyData? = activeJourneys[playerId]
 
     fun clearActiveJourney(playerId: UUID) {
         activeJourneys.remove(playerId)
+    }
+
+    fun reload() {
+        activeTaps.clear()
+        activeJourneys.clear()
+        // Reinitialize the zoneFareCalculator with fresh config
+        zoneFareCalculator = ZoneFareCalculator(plugin.config.getConfigurationSection("systems") 
+            ?: throw IllegalStateException("Missing systems configuration"))
     }
 
     fun handleTapIn(player: Player, systemId: String, stationId: String): Boolean {

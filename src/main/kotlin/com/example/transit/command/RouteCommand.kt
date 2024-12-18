@@ -65,7 +65,7 @@ class RouteCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
 
         // Create route
         val route = Route(
-            id = "${systemId}_${routeName.toLowerCase()}",
+            id = "${systemId}_${routeName.lowercase()}",
             name = routeName,
             systemId = systemId
         )
@@ -240,17 +240,17 @@ class RouteCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
         
         return when (args.size) {
             1 -> listOf("add", "show", "addstation", "reorder", "select", "remove")
-                .filter { it.startsWith(args[0].toLowerCase()) }
-            2 -> when (args[0].toLowerCase()) {
+                .filter { it.startsWith(args[0].lowercase()) }
+            2 -> when (args[0].lowercase()) {
                 "add" -> plugin.configManager.getSystems().map { it.id }
                 "show", "reorder", "remove" -> plugin.routeManager.getRoutes()
                 "addstation" -> plugin.routeManager.getRoutes()
                 else -> emptyList()
-            }.filter { it.startsWith(args[1].toLowerCase()) }
-            3 -> when (args[0].toLowerCase()) {
+            }.filter { it.startsWith(args[1].lowercase()) }
+            3 -> when (args[0].lowercase()) {
                 "addstation" -> plugin.stationManager.getSystemStations(args[1])
                     .map { it.id }
-                    .filter { it.startsWith(args[2].toLowerCase()) }
+                    .filter { it.startsWith(args[2].lowercase()) }
                 else -> emptyList()
             }
             else -> emptyList()

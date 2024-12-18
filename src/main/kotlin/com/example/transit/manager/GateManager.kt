@@ -23,7 +23,9 @@ class GateManager(private val plugin: TransitPlugin) {
     fun reload() {
         gates.clear()
         loadGates()
-    }
+        // Update all gate signs
+        gates.values.forEach { updateGateSign(it) }
+}
 
     fun startGateCreation(player: Player, location: Location) {
         GateSetupConversation(plugin, location, player).start()

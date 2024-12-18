@@ -8,6 +8,7 @@ import java.io.File
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
 import java.util.*
+
 import java.util.concurrent.ConcurrentHashMap
 
 class StaffManager(private val plugin: TransitPlugin) {
@@ -26,7 +27,12 @@ class StaffManager(private val plugin: TransitPlugin) {
 
     fun reload() {
         staffMembers.clear()
+        staffPerformance.clear()
+        activeShifts.clear()
+        pendingPayments.clear()
         loadStaffData()
+        startPaymentScheduler()
+        startPerformanceTracker()
     }
 
     fun addStaffMember(

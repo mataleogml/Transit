@@ -62,7 +62,7 @@ class StationCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
 
         // Create station
         val station = Station(
-            id = "${systemId}_${stationName.toLowerCase()}",
+            id = "${systemId}_${stationName.lowercase()}",
             name = stationName,
             systemId = systemId,
             location = player.location,
@@ -89,7 +89,7 @@ class StationCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
 
         val systemId = args[1]
         val stationName = args[2]
-        val stationId = "${systemId}_${stationName.toLowerCase()}"
+        val stationId = "${systemId}_${stationName.lowercase()}"
 
         if (plugin.stationManager.removeStation(stationId)) {
             player.sendMessage("§aStation $stationName removed from system $systemId")
@@ -105,13 +105,13 @@ class StationCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
         }
 
         if (args.size < 3) {
-            player.sendMessage("§cUsage: /station ${args[0].toLowerCase()} <system> <name>")
+            player.sendMessage("§cUsage: /station ${args[0].lowercase()} <system> <name>")
             return
         }
 
         val systemId = args[1]
         val stationName = args[2]
-        val stationId = "${systemId}_${stationName.toLowerCase()}"
+        val stationId = "${systemId}_${stationName.lowercase()}"
 
         if (plugin.stationManager.updateStationStatus(stationId, newStatus)) {
             val statusText = when (newStatus) {
@@ -138,7 +138,7 @@ class StationCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
 
         val systemId = args[1]
         val stationName = args[2]
-        val stationId = "${systemId}_${stationName.toLowerCase()}"
+        val stationId = "${systemId}_${stationName.lowercase()}"
 
         val station = plugin.stationManager.getStation(stationId)
         if (station != null) {
@@ -196,15 +196,15 @@ private fun handleList(player: Player, args: Array<out String>) {
         return when {
             args.isEmpty() -> listOf("add", "remove", "enable", "disable", "maintenance", "tp", "list")
             args.size == 1 -> listOf("add", "remove", "enable", "disable", "maintenance", "tp", "list")
-                .filter { it.startsWith(args[0].toLowerCase()) }
+                .filter { it.startsWith(args[0].lowercase()) }
             args.size == 2 -> plugin.configManager.getSystems()
                 .map { it.id }
-                .filter { it.startsWith(args[1].toLowerCase()) }
-            args.size == 3 -> when (args[0].toLowerCase()) {
+                .filter { it.startsWith(args[1].lowercase()) }
+            args.size == 3 -> when (args[0].lowercase()) {
                 "tp", "enable", "disable", "maintenance", "remove" -> plugin.stationManager
                     .getSystemStations(args[1])
                     .map { it.name }
-                    .filter { it.startsWith(args[2].toLowerCase()) }
+                    .filter { it.startsWith(args[2].lowercase()) }
                 else -> emptyList()
             }
             else -> emptyList()

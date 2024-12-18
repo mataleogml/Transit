@@ -6,26 +6,25 @@ plugins {
 group = "com.example"
 version = "1.0-SNAPSHOT"
 
-// Keep Java toolchain at 21
+// Set Java toolchain to 17
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
 }
 
-// Set Kotlin to target Java 21 (latest supported)
+// Set Kotlin to target Java 17
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions {
-        jvmTarget = "21"  // Changed from "21" to "21"
+        jvmTarget = "17"
     }
 }
 
-// Keep Java compilation targeting Java 21
+// Set Java compilation to target Java 17
 tasks.withType<JavaCompile> {
-    sourceCompatibility = JavaVersion.VERSION_21.toString()
-    targetCompatibility = JavaVersion.VERSION_21.toString()
-    options.compilerArgs.add("--enable-preview")
-    options.release.set(21)
+    sourceCompatibility = JavaVersion.VERSION_17.toString()
+    targetCompatibility = JavaVersion.VERSION_17.toString()
+    options.release.set(17)
 }
 
 repositories {
@@ -50,6 +49,11 @@ tasks {
         archiveClassifier.set("")
         relocate("kotlin", "com.example.transit.lib.kotlin")
         minimize()
+        manifest {
+            attributes(
+                "Multi-Release" to true
+            )
+        }
     }
     
     processResources {
@@ -63,6 +67,5 @@ tasks {
 
     test {
         useJUnitPlatform()
-        jvmArgs("--enable-preview")
     }
 }
