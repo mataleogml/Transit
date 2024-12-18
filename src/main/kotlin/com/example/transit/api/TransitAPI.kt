@@ -2,6 +2,7 @@ package com.example.transit.api
 
 import com.example.transit.TransitPlugin
 import com.example.transit.model.*
+import com.example.transit.statistics.StatisticsManager
 import org.bukkit.Location
 import org.bukkit.entity.Player
 import java.util.UUID
@@ -36,11 +37,15 @@ class TransitAPI(private val plugin: TransitPlugin) {
         systemId: String,
         period: StatisticsManager.StatisticsPeriod = StatisticsManager.StatisticsPeriod.ALL_TIME
     ): Double {
-        return plugin.statisticsManager.getSystemRevenue(systemId, period)
+        return plugin.statisticsManager.getSystemStatistics(systemId, period)?.totalRevenue ?: 0.0
     }
 
     fun getStationStatistics(stationId: String): StatisticsManager.Statistics? {
-        return plugin.statisticsManager.getStatistics("station", stationId)
+        return plugin.statisticsManager.getStationStatistics(stationId)
+    }
+
+    fun getRouteStatistics(routeId: String): StatisticsManager.Statistics? {
+        return plugin.statisticsManager.getRouteStatistics(routeId)
     }
 
     fun addStation(
@@ -66,5 +71,26 @@ class TransitAPI(private val plugin: TransitPlugin) {
 
     fun addRouteStation(routeId: String, stationId: String): Boolean {
         return plugin.routeManager.addStationToRoute(routeId, stationId)
+    }
+
+    fun removeStation(systemId: String, stationName: String): Boolean {
+        val stationId = "${systemId}_${stationName.toLowerCase()}"
+        return plugin.stationManager.removeStation(stationId)
+    }
+
+    fun updateStationStatus(stationId: String, status: StationStatus): Boolean {
+        return plugin.stationManager.updateStationStatus(stationId, status)
+    }
+
+    fun getNearbyStations(location: Location, radius: Double): List<Station> {
+        return plugin.stationManager.getNearbyStations(location, radius)
+    }
+
+    fun getActiveJourney(playerId: UUID): JourneyData? {
+        return plugin.fareManager.getActiveJourney(playerId)
+    }
+
+    fun getSystemStaff(systemId: String): Set<StaffMember> {
+        return plugin.staffManager.getSystemStaff(systemId)
     }
 }

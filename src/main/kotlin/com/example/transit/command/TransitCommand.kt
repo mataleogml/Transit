@@ -1,14 +1,12 @@
 package com.example.transit.command
 
 import com.example.transit.TransitPlugin
-import com.example.transit.model.FareType
-import com.example.transit.model.TransitSystem
-import com.example.transit.statistics.StatisticsManager
+import com.example.transit.model.*
+import com.example.transit.statistics.StatisticsManager.StatisticsPeriod
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
 import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
-import org.bukkit.entity.Player
 import java.util.UUID
 
 class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCompleter {
@@ -78,6 +76,11 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
         val systemId = args[2]
         when (args[1].toLowerCase()) {
             "add" -> {
+                if (args.size < 4) {
+                    sender.sendMessage("§cUsage: /transit staff add <system> <player> [salary] [role]")
+                    return
+                }
+                
                 val player = plugin.server.getPlayer(args[3])
                 if (player == null) {
                     sender.sendMessage("§cPlayer not found!")
@@ -85,10 +88,19 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
                 }
                 
                 val salary = if (args.size > 4) args[4].toDoubleOrNull() ?: 1000.0 else 1000.0
-                if (plugin.staffManager.addStaffMember(player.uniqueId, systemId, salary)) {
+                val role = if (args.size > 5) {
+                    try {
+                        StaffRole.valueOf(args[5].uppercase())
+                    } catch (e: IllegalArgumentException) {
+                        StaffRole.TRAINEE
+                    }
+                } else StaffRole.TRAINEE
+
+                if (plugin.staffManager.addStaffMember(player.uniqueId, systemId, role, salary)) {
                     sender.sendMessage("§aStaff member added successfully!")
+                    player.sendMessage("§aYou have been added as a staff member for $systemId")
                 } else {
-                    sender.sendMessage("§cFailed to add staff member!")
+                    sender.sendMessage("§cFailed to add staff member! They may already be staff.")
                 }
             }
             "remove" -> {
@@ -105,6 +117,9 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
                 
                 if (plugin.staffManager.removeStaffMember(playerId, systemId)) {
                     sender.sendMessage("§aStaff member removed successfully!")
+                    plugin.server.getPlayer(playerId)?.sendMessage(
+                        "§cYou have been removed from staff in system $systemId"
+                    )
                 } else {
                     sender.sendMessage("§cFailed to remove staff member!")
                 }
@@ -118,77 +133,55 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
                 
                 sender.sendMessage("§6Staff members for system $systemId:")
                 staffList.forEach { staff ->
-                    val playerName = plugin.server.getOfflinePlayer(staff.playerId).name ?: staff.playerId
-                    sender.sendMessage("§7- $playerName (Salary: $${staff.salary})")
+                    val playerName = plugin.server.getOfflinePlayer(staff.playerId).name ?: staff.playerId.toString()
+                    sender.sendMessage("""
+                        §7- $playerName
+                          §7Role: §f${staff.role}
+                          §7Salary: §f$${staff.salary}
+                          §7Payment Period: §f${staff.paymentPeriod}
+                    """.trimIndent())
                 }
             }
         }
     }
 
     private fun handleStats(sender: CommandSender, args: Array<out String>) {
-        if (args.size < 2) {
+        if (!sender.hasPermission("transit.stats")) {
+            sender.sendMessage("§cYou don't have permission to view statistics!")
+            return
+        }
+
+        if (args.size < 3) {
             sender.sendMessage("§cUsage: /transit stat <system/station/route> <id> [period]")
             return
         }
 
         val period = if (args.size > 3) {
             try {
-                StatisticsManager.StatisticsPeriod.valueOf(args[3].uppercase())
+                StatisticsPeriod.valueOf(args[3].uppercase())
             } catch (e: IllegalArgumentException) {
-                StatisticsManager.StatisticsPeriod.ALL_TIME
+                StatisticsPeriod.ALL_TIME
             }
-        } else StatisticsManager.StatisticsPeriod.ALL_TIME
+        } else StatisticsPeriod.ALL_TIME
 
         when (args[1].toLowerCase()) {
             "system" -> {
-                if (args.size < 3) {
-                    sender.sendMessage("§cPlease specify a system ID!")
-                    return
-                }
                 val systemId = args[2]
                 val stats = plugin.statisticsManager.getSystemStatistics(systemId, period)
                 displayStatistics(sender, "System", systemId, stats, period)
             }
             "station" -> {
-                if (args.size < 3) {
-                    sender.sendMessage("§cPlease specify a station ID!")
-                    return
-                }
                 val stationId = args[2]
-                val stats = plugin.statisticsManager.getStationStatistics(stationId)
+                val stats = plugin.statisticsManager.getStationStatistics(stationId, period)
                 displayStatistics(sender, "Station", stationId, stats, period)
             }
             "route" -> {
-                if (args.size < 3) {
-                    sender.sendMessage("§cPlease specify a route ID!")
-                    return
-                }
                 val routeId = args[2]
-                val stats = plugin.statisticsManager.getRouteStatistics(routeId)
+                val stats = plugin.statisticsManager.getRouteStatistics(routeId, period)
                 displayStatistics(sender, "Route", routeId, stats, period)
             }
+            else -> sender.sendMessage("§cInvalid statistics type! Use: system, station, or route")
         }
-    }
-
-    private fun displayStatistics(
-        sender: CommandSender, 
-        type: String,
-        id: String,
-        stats: StatisticsManager.Statistics?,
-        period: StatisticsManager.StatisticsPeriod
-    ) {
-        if (stats == null) {
-            sender.sendMessage("§cNo statistics found for $type $id")
-            return
-        }
-
-        sender.sendMessage("""
-            §6$type Statistics ($id) - $period
-            §7Total Revenue: §f${stats.totalRevenue.formatCurrency()}
-            §7Total Transactions: §f${stats.totalTransactions}
-            §7Average Transaction: §f${(stats.totalRevenue / stats.totalTransactions).formatCurrency()}
-            §7Last Updated: §f${stats.lastUpdated}
-        """.trimIndent())
     }
 
     private fun handleConfig(sender: CommandSender, args: Array<out String>) {
@@ -211,6 +204,7 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
                 plugin.saveConfig()
                 sender.sendMessage("§aConfiguration saved successfully!")
             }
+            else -> sender.sendMessage("§cInvalid config action! Use: reload or save")
         }
     }
 
@@ -237,7 +231,33 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
         """.trimIndent())
     }
 
-    override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<out String>): List<String> {
+    private fun displayStatistics(
+        sender: CommandSender,
+        type: String,
+        id: String,
+        stats: StatisticsManager.Statistics?,
+        period: StatisticsPeriod
+    ) {
+        if (stats == null) {
+            sender.sendMessage("§cNo statistics found for $type $id")
+            return
+        }
+
+        sender.sendMessage("""
+            §6$type Statistics ($id) - $period
+            §7Total Revenue: §f${stats.totalRevenue.formatCurrency()}
+            §7Total Transactions: §f${stats.totalTransactions}
+            §7Average Transaction: §f${(stats.totalRevenue / stats.totalTransactions).formatCurrency()}
+            §7Last Updated: §f${stats.lastUpdated}
+        """.trimIndent())
+    }
+
+    override fun onTabComplete(
+        sender: CommandSender,
+        command: Command,
+        alias: String,
+        args: Array<out String>
+    ): List<String> {
         return when (args.size) {
             1 -> listOf("create", "staff", "stat", "config", "info")
                 .filter { it.startsWith(args[0].toLowerCase()) }
@@ -259,7 +279,7 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
                 else -> emptyList()
             }.filter { it.startsWith(args[2].toLowerCase()) }
             4 -> when {
-                args[0].equals("stat", true) -> StatisticsManager.StatisticsPeriod.values()
+                args[0].equals("stat", true) -> StatisticsPeriod.values()
                     .map { it.name.toLowerCase() }
                     .filter { it.startsWith(args[3].toLowerCase()) }
                 else -> emptyList()
@@ -267,6 +287,8 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
             else -> emptyList()
         }
     }
+
+    private fun Double.formatCurrency(): String = "$${String.format("%.2f", this)}"
 
     private fun sendHelp(sender: CommandSender) {
         sender.sendMessage("""
@@ -278,6 +300,4 @@ class TransitCommand(private val plugin: TransitPlugin) : CommandExecutor, TabCo
             §f/transit info <system> - View system information
         """.trimIndent())
     }
-
-    private fun Double.formatCurrency(): String = "$${String.format("%.2f", this)}"
 }

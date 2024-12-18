@@ -12,9 +12,82 @@ class ConfigManager(private val plugin: TransitPlugin) {
         loadSystems()
     }
 
+    fun reload() {
+        systems.clear()
+        loadSystems()
+    }
+
+    fun reloadConfig() {
+        plugin.reloadConfig()
+        reload()
+    }
+
     fun getTransitSystem(id: String): TransitSystem? = systems[id]
     
     fun getSystems(): List<TransitSystem> = systems.values.toList()
+
+    fun addTransitSystem(system: TransitSystem): Boolean {
+        if (systems.containsKey(system.id)) return false
+        
+        systems[system.id] = system
+        
+        // Save to config
+        val section = plugin.config.createSection("systems.${system.id}")
+        section.set("name", system.name)
+        section.set("fareType", system.fareType.name)
+        section.set("maxFare", system.maxFare)
+        
+        // Save fare data based on type
+        when (system.fareType) {
+            FareType.FLAT -> {
+                section.set("fare", system.fareData["fare"])
+            }
+            FareType.DISTANCE -> {
+                section.set("baseRate", system.fareData["baseRate"])
+                section.set("perBlock", system.fareData["perBlock"])
+            }
+            FareType.ZONE -> {
+                val zonesSection = section.createSection("zones")
+                val fareData = system.fareData
+                
+                // Save rings
+                @Suppress("UNCHECKED_CAST")
+                val rings = fareData["rings"] as? Map<String, Int>
+                if (rings != null) {
+                    val ringsSection = zonesSection.createSection("rings")
+                    rings.forEach { (zone, ring) ->
+                        ringsSection.set(zone, ring)
+                    }
+                }
+                
+                // Save groups
+                @Suppress("UNCHECKED_CAST")
+                val groups = fareData["groups"] as? Map<String, List<String>>
+                if (groups != null) {
+                    val groupsSection = zonesSection.createSection("groups")
+                    groups.forEach { (name, zones) ->
+                        groupsSection.set(name, zones)
+                    }
+                }
+                
+                // Save rules
+                @Suppress("UNCHECKED_CAST")
+                val rules = fareData["rules"] as? List<Map<String, Any>>
+                if (rules != null) {
+                    val rulesSection = zonesSection.createSection("rules")
+                    rules.forEachIndexed { index, rule ->
+                        val ruleSection = rulesSection.createSection(index.toString())
+                        rule.forEach { (key, value) ->
+                            ruleSection.set(key, value)
+                        }
+                    }
+                }
+            }
+        }
+        
+        plugin.saveConfig()
+        return true
+    }
 
     private fun loadSystems() {
         val systemsSection = plugin.config.getConfigurationSection("systems") ?: return

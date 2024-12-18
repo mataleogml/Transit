@@ -1,6 +1,7 @@
 package com.example.transit.command
 
 import com.example.transit.TransitPlugin
+import com.example.transit.statistics.StatisticsManager
 import com.example.transit.statistics.StatisticsManager.StatisticsPeriod
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor
@@ -182,19 +183,13 @@ class StatisticsCommand(private val plugin: TransitPlugin) : CommandExecutor, Ta
             §7Average Transaction: §f$${report.averageTransactionValue}
             
             §6Peak Hours:
-            ${report.peakHours.joinToString("\n") { 
-                "§7${it.hour}:00 - ${it.hour + 1}:00: §f${it.transactions} transactions"
-            }}
+            ${formatPeakHours(report.peakHours)}
             
             §6Busiest Stations:
-            ${report.busyStations.take(5).joinToString("\n") { 
-                "§7${it.name}: §f${it.usageCount} uses"
-            }}
+            ${formatBusyStations(report.busyStations)}
             
             §6Popular Routes:
-            ${report.popularRoutes.take(5).joinToString("\n") { 
-                "§7${formatRoute(it)}: §f${it.usageCount} trips (avg: $${it.averageFare})"
-            }}
+            ${formatPopularRoutes(report.popularRoutes)}
         """.trimIndent())
     }
 
@@ -226,7 +221,6 @@ class StatisticsCommand(private val plugin: TransitPlugin) : CommandExecutor, Ta
         }
 
         sender.sendMessage("§cExport functionality not yet implemented")
-        // TODO: Implement export functionality
     }
 
     private fun formatHourlyStats(stats: Map<Int, Int>): String {
@@ -237,10 +231,24 @@ class StatisticsCommand(private val plugin: TransitPlugin) : CommandExecutor, Ta
             }
     }
 
-    private fun formatRoute(route: StatisticsManager.PopularRoute): String {
-        val fromStation = plugin.stationManager.getStation(route.fromStationId)?.name ?: route.fromStationId
-        val toStation = plugin.stationManager.getStation(route.toStationId)?.name ?: route.toStationId
-        return "$fromStation → $toStation"
+    private fun formatPeakHours(peakHours: List<StatisticsManager.PeakHour>): String {
+        return peakHours.joinToString("\n") { peak ->
+            "§7${peak.hour}:00 - ${peak.hour + 1}:00: §f${peak.transactions} transactions"
+        }
+    }
+
+    private fun formatBusyStations(stations: List<StatisticsManager.BusyStation>): String {
+        return stations.take(5).joinToString("\n") { station ->
+            "§7${station.name}: §f${station.usageCount} uses"
+        }
+    }
+
+    private fun formatPopularRoutes(routes: List<StatisticsManager.PopularRoute>): String {
+        return routes.take(5).joinToString("\n") { route ->
+            val fromStation = plugin.stationManager.getStation(route.fromStationId)?.name ?: route.fromStationId
+            val toStation = plugin.stationManager.getStation(route.toStationId)?.name ?: route.toStationId
+            "§7$fromStation → $toStation: §f${route.usageCount} trips (avg: $${route.averageFare})"
+        }
     }
 
     override fun onTabComplete(

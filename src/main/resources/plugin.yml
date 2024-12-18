@@ -16,6 +16,12 @@ commands:
   fare:
     description: Fare management command
     usage: /fare <subcommand>
+  staff:
+    description: Staff management command
+    usage: /staff <subcommand>
+  stats:
+    description: Statistics and reporting command
+    usage: /stats <subcommand>
 
 permissions:
   transit.admin:
@@ -27,3 +33,9 @@ permissions:
   transit.user:
     description: Allows access to user commands
     default: true
+      transit.stats:
+    description: Allows access to statistics commands
+    default: op
+  transit.stats.export:
+    description: Allows exporting statistics data
+    default: op

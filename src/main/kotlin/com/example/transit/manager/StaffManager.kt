@@ -1,10 +1,7 @@
 package com.example.transit.manager
 
 import com.example.transit.TransitPlugin
-import com.example.transit.model.PaymentPeriod
-import com.example.transit.model.StaffMember
-import com.example.transit.model.Transaction
-import com.example.transit.model.TransactionType
+import com.example.transit.model.*
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import java.io.File
@@ -15,22 +12,27 @@ import java.util.concurrent.ConcurrentHashMap
 
 class StaffManager(private val plugin: TransitPlugin) {
     private val staffMembers = ConcurrentHashMap<String, MutableSet<StaffMember>>()
+    private val staffPerformance = ConcurrentHashMap<UUID, StaffPerformance>()
+    private val activeShifts = ConcurrentHashMap<UUID, StaffShift>()
+    private val pendingPayments = ConcurrentHashMap<UUID, MutableList<PendingPayment>>()
     private val staffFile = File(plugin.dataFolder, "staff.yml")
     private val config = YamlConfiguration.loadConfiguration(staffFile)
-    private val pendingPayments = ConcurrentHashMap<UUID, MutableList<Payment>>()
 
     init {
         loadStaffData()
         startPaymentScheduler()
+        startPerformanceTracker()
     }
 
-    fun getSystemStaff(systemId: String): Set<StaffMember> {
-        return staffMembers[systemId]?.toSet() ?: emptySet()
+    fun reload() {
+        staffMembers.clear()
+        loadStaffData()
     }
 
     fun addStaffMember(
         playerId: UUID,
         systemId: String,
+        role: StaffRole,
         salary: Double,
         period: PaymentPeriod = PaymentPeriod.MONTHLY
     ): Boolean {
@@ -39,21 +41,103 @@ class StaffManager(private val plugin: TransitPlugin) {
         val staffMember = StaffMember(
             playerId = playerId,
             systemId = systemId,
+            role = role,
             salary = salary,
-            paymentPeriod = period
+            paymentPeriod = period,
+            lastPaid = LocalDateTime.now(),
+            hireDate = LocalDateTime.now()
         )
         
         staffMembers.getOrPut(systemId) { mutableSetOf() }.add(staffMember)
+        initializePerformance(playerId)
         saveStaffMember(staffMember)
         return true
     }
 
+    private fun initializePerformance(playerId: UUID) {
+        staffPerformance[playerId] = StaffPerformance(
+            playerId = playerId,
+            shiftHistory = mutableListOf(),
+            transactions = 0,
+            customerInteractions = 0,
+            incidentCount = 0,
+            averageResponseTime = 0.0,
+            lastEvaluation = LocalDateTime.now()
+        )
+    }
+
     fun removeStaffMember(playerId: UUID, systemId: String): Boolean {
-        return staffMembers[systemId]?.removeIf { 
-            it.playerId == playerId 
-        }?.also { 
-            if (it) saveStaffData() 
+        return staffMembers[systemId]?.let { members ->
+            val removed = members.removeIf { it.playerId == playerId }
+            if (removed) {
+                saveStaffData()
+                staffPerformance.remove(playerId)
+            }
+            removed
         } ?: false
+    }
+
+    fun updateStaffRole(playerId: UUID, systemId: String, newRole: StaffRole): Boolean {
+        return staffMembers[systemId]?.find { it.playerId == playerId }?.let { member ->
+            val updatedMember = member.copy(role = newRole)
+            staffMembers[systemId]?.remove(member)
+            staffMembers[systemId]?.add(updatedMember)
+            saveStaffMember(updatedMember)
+            true
+        } ?: false
+    }
+
+    fun updateSalary(playerId: UUID, systemId: String, newSalary: Double): Boolean {
+        return staffMembers[systemId]?.find { it.playerId == playerId }?.let { member ->
+            val updatedMember = member.copy(salary = newSalary)
+            staffMembers[systemId]?.remove(member)
+            staffMembers[systemId]?.add(updatedMember)
+            saveStaffMember(updatedMember)
+            true
+        } ?: false
+    }
+
+    fun startShift(playerId: UUID, systemId: String): Boolean {
+        if (!isStaff(playerId, systemId)) return false
+        if (activeShifts.containsKey(playerId)) return false
+
+        val shift = StaffShift(
+            startTime = LocalDateTime.now(),
+            systemId = systemId,
+            staffId = playerId
+        )
+        activeShifts[playerId] = shift
+        staffPerformance[playerId]?.shiftHistory?.add(shift)
+        return true
+    }
+
+    fun endShift(playerId: UUID): Boolean {
+        val shift = activeShifts.remove(playerId) ?: return false
+        shift.endTime = LocalDateTime.now()
+        calculateShiftPay(playerId, shift)
+        return true
+    }
+
+    private fun calculateShiftPay(playerId: UUID, shift: StaffShift) {
+        val member = staffMembers[shift.systemId]?.find { it.playerId == playerId } ?: return
+        val hoursWorked = ChronoUnit.HOURS.between(shift.startTime, shift.endTime)
+        val hourlyRate = member.salary / (member.paymentPeriod.days * 8) // Assuming 8-hour workday
+        val basePay = hourlyRate * hoursWorked
+        
+        // Calculate performance bonus
+        val performance = staffPerformance[playerId]
+        val bonus = performance?.calculateBonus() ?: 0.0
+        
+        // Create pending payment
+        val totalPay = basePay + bonus
+        pendingPayments.getOrPut(playerId) { mutableListOf() }.add(
+            PendingPayment(
+                playerId = playerId,
+                systemId = shift.systemId,
+                amount = totalPay,
+                type = PaymentType.SHIFT_PAY
+            )
+        )
     }
 
     fun isStaff(playerId: UUID, systemId: String): Boolean {
@@ -61,17 +145,48 @@ class StaffManager(private val plugin: TransitPlugin) {
     }
 
     fun isStaffAnywhere(playerId: UUID): Boolean {
-        return staffMembers.values.any { members ->
+        return staffMembers.values.any { members -> 
             members.any { it.playerId == playerId }
         }
     }
 
-    fun updateSalary(playerId: UUID, systemId: String, newSalary: Double): Boolean {
-        staffMembers[systemId]?.find { it.playerId == playerId }?.let { member ->
-            val updatedMember = member.copy(salary = newSalary)
-            staffMembers[systemId]?.remove(member)
-            staffMembers[systemId]?.add(updatedMember)
-            saveStaffMember(updatedMember)
+    fun hasPermission(playerId: UUID, systemId: String, permission: StaffPermission): Boolean {
+        return staffMembers[systemId]?.find { it.playerId == playerId }?.let { member ->
+            member.role.permissions.contains(permission)
+        } ?: false
+    }
+
+    fun getSystemStaff(systemId: String): Set<StaffMember> {
+        return staffMembers[systemId]?.toSet() ?: emptySet()
+    }
+
+    fun getStaffPerformance(playerId: UUID): StaffPerformance? {
+        return staffPerformance[playerId]
+    }
+
+    fun checkPendingPayments(player: Player) {
+        pendingPayments[player.uniqueId]?.let { payments ->
+            payments.removeAll { payment ->
+                processPayment(player, payment)
+            }
+        }
+    }
+
+    private fun processPayment(player: Player, payment: PendingPayment): Boolean {
+        val systemBalance = plugin.transactionManager.getSystemBalance(payment.systemId)
+        if (systemBalance < payment.amount) return false
+
+        if (plugin.economy.depositPlayer(player, payment.amount).transactionSuccess()) {
+            plugin.transactionManager.logTransaction(
+                Transaction(
+                    playerId = payment.playerId,
+                    systemId = payment.systemId,
+                    fromStation = "STAFF_PAYMENT",
+                    toStation = null,
+                    amount = payment.amount,
+                    type = TransactionType.STAFF_PAYMENT
+                )
+            )
             return true
         }
         return false
@@ -80,94 +195,57 @@ class StaffManager(private val plugin: TransitPlugin) {
     private fun startPaymentScheduler() {
         plugin.server.scheduler.runTaskTimer(plugin, Runnable {
             processPayments()
-        }, 72000L, 72000L) // Check every hour
+        }, 72000L, 72000L) // Every hour
     }
 
     private fun processPayments() {
         val now = LocalDateTime.now()
-        staffMembers.forEach { (systemId, members) ->
-            members.forEach { staffMember ->
-                if (shouldProcessPayment(staffMember, now)) {
-                    processStaffPayment(staffMember, systemId)
-                }
+        staffMembers.values.flatten().forEach { member ->
+            val lastPaid = member.lastPaid
+            val daysUntilPayment = when (member.paymentPeriod) {
+                PaymentPeriod.DAILY -> 1
+                PaymentPeriod.WEEKLY -> 7
+                PaymentPeriod.MONTHLY -> 30
             }
-        }
-    }
-
-    private fun shouldProcessPayment(staffMember: StaffMember, now: LocalDateTime): Boolean {
-        val daysSinceLastPaid = ChronoUnit.DAYS.between(staffMember.lastPaid, now)
-        return when (staffMember.paymentPeriod) {
-            PaymentPeriod.DAILY -> daysSinceLastPaid >= 1
-            PaymentPeriod.WEEKLY -> daysSinceLastPaid >= 7
-            PaymentPeriod.MONTHLY -> daysSinceLastPaid >= 30
-        }
-    }
-
-    private fun processStaffPayment(staffMember: StaffMember, systemId: String) {
-        val player = plugin.server.getPlayer(staffMember.playerId)
-        
-        if (player != null && player.isOnline) {
-            payStaff(player, staffMember, systemId)
-        } else {
-            queuePayment(staffMember)
-        }
-    }
-
-    private fun payStaff(player: Player, staffMember: StaffMember, systemId: String) {
-        val systemBalance = plugin.transactionManager.getSystemBalance(systemId)
-        if (systemBalance < staffMember.salary) {
-            plugin.logger.warning("Insufficient system balance for staff payment: $systemId")
-            return
-        }
-
-        if (plugin.economy.depositPlayer(player, staffMember.salary).transactionSuccess()) {
-            plugin.transactionManager.logTransaction(
-                Transaction(
-                    playerId = staffMember.playerId,
-                    systemId = systemId,
-                    fromStation = "STAFF_PAYMENT",
-                    toStation = null,
-                    amount = staffMember.salary,
-                    type = TransactionType.STAFF_PAYMENT
-                )
-            )
-
-            updateLastPaidTime(staffMember)
-            player.sendMessage("§aReceived staff payment: $${staffMember.salary} for system $systemId")
-        }
-    }
-
-    private fun queuePayment(staffMember: StaffMember) {
-        pendingPayments.getOrPut(staffMember.playerId) { mutableListOf() }
-            .add(Payment(staffMember.systemId, staffMember.salary))
-    }
-
-    fun checkPendingPayments(player: Player) {
-        pendingPayments[player.uniqueId]?.let { payments ->
-            payments.forEach { payment ->
-                if (plugin.economy.depositPlayer(player, payment.amount).transactionSuccess()) {
-                    plugin.transactionManager.logTransaction(
-                        Transaction(
-                            playerId = player.uniqueId,
-                            systemId = payment.systemId,
-                            fromStation = "STAFF_PAYMENT_DELAYED",
-                            toStation = null,
-                            amount = payment.amount,
-                            type = TransactionType.STAFF_PAYMENT
-                        )
+            
+            if (ChronoUnit.DAYS.between(lastPaid, now) >= daysUntilPayment) {
+                pendingPayments.getOrPut(member.playerId) { mutableListOf() }.add(
+                    PendingPayment(
+                        playerId = member.playerId,
+                        systemId = member.systemId,
+                        amount = member.salary,
+                        type = PaymentType.REGULAR_SALARY
                     )
-                    player.sendMessage("§aReceived pending staff payment: $${payment.amount}")
-                }
+                )
             }
-            pendingPayments.remove(player.uniqueId)
         }
     }
 
-    private fun updateLastPaidTime(staffMember: StaffMember) {
-        staffMembers[staffMember.systemId]?.let { members ->
-            members.remove(staffMember)
-            members.add(staffMember.copy(lastPaid = LocalDateTime.now()))
-            saveStaffData()
+    private fun startPerformanceTracker() {
+        plugin.server.scheduler.runTaskTimer(plugin, Runnable {
+            updateAllPerformanceMetrics()
+        }, 36000L, 36000L) // Every 30 minutes
+    }
+
+    private fun updateAllPerformanceMetrics() {
+        staffPerformance.values.forEach { performance ->
+            // Update performance metrics
+            val activeShift = activeShifts[performance.playerId]
+            if (activeShift != null) {
+                performance.transactions = activeShift.transactions
+                performance.incidentCount = activeShift.incidents
+                
+                // Calculate average response time from incident log
+                val incidents = activeShift.getIncidents()
+                if (incidents.isNotEmpty()) {
+                    val totalResponseTime = incidents.sumOf { 
+                        ChronoUnit.MINUTES.between(it.timestamp, LocalDateTime.now()).toDouble()
+                    }
+                    performance.averageResponseTime = totalResponseTime / incidents.size
+                }
+            }
+            
+            performance.lastEvaluation = LocalDateTime.now()
         }
     }
 
@@ -183,9 +261,12 @@ class StaffManager(private val plugin: TransitPlugin) {
                         StaffMember(
                             playerId = UUID.fromString(playerIdStr),
                             systemId = systemId,
+                            role = StaffRole.valueOf(it.getString("role", "TRAINEE")!!),
                             salary = it.getDouble("salary"),
                             paymentPeriod = PaymentPeriod.valueOf(it.getString("period", "MONTHLY")!!),
                             lastPaid = LocalDateTime.parse(it.getString("lastPaid") 
+                                ?: LocalDateTime.now().toString()),
+                            hireDate = LocalDateTime.parse(it.getString("hireDate") 
                                 ?: LocalDateTime.now().toString())
                         )
                     )
@@ -195,21 +276,28 @@ class StaffManager(private val plugin: TransitPlugin) {
         }
     }
 
-    private fun saveStaffMember(staffMember: StaffMember) {
-        val path = "staff.${staffMember.systemId}.${staffMember.playerId}"
-        config.set("$path.salary", staffMember.salary)
-        config.set("$path.period", staffMember.paymentPeriod.name)
-        config.set("$path.lastPaid", staffMember.lastPaid.toString())
-        saveConfig()
-    }
-
-    fun saveStaffData() {
+    private fun saveStaffData() {
         config.set("staff", null) // Clear existing data
-        staffMembers.forEach { (systemId, members) ->
+        staffMembers.entries.forEach { (systemId, members) ->
             members.forEach { staffMember ->
                 saveStaffMember(staffMember)
             }
         }
+        saveConfig()
+    }
+
+    private fun saveStaffMember(staffMember: StaffMember) {
+        val path = "staff.${staffMember.systemId}.${staffMember.playerId}"
+        config.set("$path.role", staffMember.role.name)
+        config.set("$path.salary", staffMember.salary)
+        config.set("$path.period", staffMember.paymentPeriod.name)
+        config.set("$path.lastPaid", staffMember.lastPaid.toString())
+        config.set("$path.hireDate", staffMember.hireDate.toString())
+        saveConfig()
+    }
+
+    fun saveAll() {
+        saveStaffData()
     }
 
     private fun saveConfig() {
@@ -220,8 +308,17 @@ class StaffManager(private val plugin: TransitPlugin) {
         }
     }
 
-    private data class Payment(
+    private data class PendingPayment(
+        val playerId: UUID,
         val systemId: String,
-        val amount: Double
+        val amount: Double,
+        val type: PaymentType,
+        val timestamp: LocalDateTime = LocalDateTime.now()
     )
+
+    private enum class PaymentType {
+        REGULAR_SALARY,
+        SHIFT_PAY,
+        PERFORMANCE_BONUS
+    }
 }

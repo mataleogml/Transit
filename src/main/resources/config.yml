@@ -22,22 +22,53 @@ systems:
     fareType: ZONE
     maxFare: 8.00
     zones:
+      defaultFare: 5.00
+      peakHours: [7, 8, 9, 16, 17, 18]  # 7-9 AM and 4-6 PM
+      peakMultiplier: 1.5
+      
+      # Special fare rates
+      specialFares:
+        STUDENT: 0.5  # 50% of regular fare
+        SENIOR: 0.6   # 60% of regular fare
+        CHILD: 0.3    # 30% of regular fare
+      
+      # Zone definitions
       rings:
-        "1": 0
-        "2": 1
-        "3": 2
+        "1": 0  # City center
+        "2": 1  # Inner suburbs
+        "3": 2  # Outer suburbs
+        "4": 3  # Extended area
+      
+      # Zone groupings
       groups:
-        city_center: ["1A", "1B"]
-        suburbs: ["2A", "2B"]
+        city_center: ["1A", "1B", "1C"]
+        inner_suburbs: ["2A", "2B", "2C"]
+        outer_suburbs: ["3A", "3B", "3C"]
+        airport: ["4A"]
+      
+      # Fare rules
       rules:
         same_zone:
           from: "\\d+"
           to: "\\1"
           fare: 2.50
-        adjacent:
+        
+        adjacent_zones:
           ringDifference: 1
-          fare: 3.00
-        default: 5.00
+          fare: 3.50
+        
+        airport_premium:
+          fromGroup: "city_center"
+          toGroup: "airport"
+          fare: 7.50
+          
+        cross_zone_peak:
+          ringDifference: 2
+          fare: 4.50
+          timeRestriction:
+            startHour: 7
+            endHour: 9
+            daysOfWeek: [1, 2, 3, 4, 5]  # Weekdays only
 
   Bus:
     name: "City Bus"

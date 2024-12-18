@@ -1,4 +1,4 @@
-// Models.kt
+// src/main/kotlin/com/example/transit/model/Models.kt
 package com.example.transit.model
 
 import org.bukkit.Location
@@ -21,7 +21,9 @@ enum class PaymentPeriod {
 enum class StationStatus {
     ACTIVE,
     DISABLED,
-    MAINTENANCE
+    MAINTENANCE;
+
+    fun isActive(): Boolean = this == ACTIVE
 }
 
 // Data Classes
@@ -58,14 +60,6 @@ data class Transaction(
     val amount: Double,
     val type: TransactionType,
     val timestamp: LocalDateTime = LocalDateTime.now()
-)
-
-data class StaffMember(
-    val playerId: UUID,
-    val systemId: String,
-    val salary: Double,
-    val paymentPeriod: PaymentPeriod,
-    val lastPaid: LocalDateTime = LocalDateTime.now()
 )
 
 data class Gate(

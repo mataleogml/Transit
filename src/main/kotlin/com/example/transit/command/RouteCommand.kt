@@ -43,6 +43,40 @@ class RouteCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
         return true
     }
 
+    private fun handleAddRoute(player: Player, args: Array<out String>) {
+        if (!player.hasPermission("transit.admin")) {
+            player.sendMessage("§cYou don't have permission to create routes!")
+            return
+        }
+
+        if (args.size < 3) {
+            player.sendMessage("§cUsage: /route add <system> <name>")
+            return
+        }
+
+        val systemId = args[1]
+        val routeName = args[2]
+
+        // Check if system exists
+        if (plugin.configManager.getTransitSystem(systemId) == null) {
+            player.sendMessage("§cTransit system not found!")
+            return
+        }
+
+        // Create route
+        val route = Route(
+            id = "${systemId}_${routeName.toLowerCase()}",
+            name = routeName,
+            systemId = systemId
+        )
+
+        if (plugin.routeManager.addRoute(route)) {
+            player.sendMessage("§aRoute $routeName created successfully!")
+        } else {
+            player.sendMessage("§cFailed to create route! It may already exist.")
+        }
+    }
+
     private fun handleShowRoute(player: Player, args: Array<out String>) {
         if (args.size < 2) {
             player.sendMessage("§cUsage: /route show <route>")
@@ -64,11 +98,52 @@ class RouteCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
             val component = TextComponent("§7${index + 1}. ${station?.name ?: stationId}")
             
             // Add teleport action
-            component.clickEvent = ClickEvent(ClickEvent.Action.RUN_COMMAND, "/station tp ${route.systemId} ${station?.name}")
-            component.hoverEvent = HoverEvent(HoverEvent.Action.SHOW_TEXT, 
-                ComponentBuilder("§eClick to teleport to this station").create())
+            component.clickEvent = ClickEvent(
+                ClickEvent.Action.RUN_COMMAND,
+                "/station tp ${route.systemId} ${station?.name}"
+            )
+            component.hoverEvent = HoverEvent(
+                HoverEvent.Action.SHOW_TEXT, 
+                ComponentBuilder("§eClick to teleport to this station").create()
+            )
             
             player.spigot().sendMessage(component)
+        }
+    }
+
+    private fun handleAddStation(player: Player, args: Array<out String>) {
+        if (!player.hasPermission("transit.admin")) {
+            player.sendMessage("§cYou don't have permission to modify routes!")
+            return
+        }
+
+        if (args.size < 3) {
+            player.sendMessage("§cUsage: /route addstation <route> <station>")
+            return
+        }
+
+        val routeId = args[1]
+        val stationId = args[2]
+
+        // Check if route exists
+        val route = plugin.routeManager.getRoute(routeId)
+        if (route == null) {
+            player.sendMessage("§cRoute not found!")
+            return
+        }
+
+        // Check if station exists
+        val station = plugin.stationManager.getStation(stationId)
+        if (station == null) {
+            player.sendMessage("§cStation not found!")
+            return
+        }
+
+        // Add station to route
+        if (plugin.routeManager.addStationToRoute(routeId, stationId)) {
+            player.sendMessage("§aStation added to route successfully!")
+        } else {
+            player.sendMessage("§cFailed to add station! It may already be in the route.")
         }
     }
 
@@ -139,6 +214,22 @@ class RouteCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
         }
     }
 
+    private data class ReorderSession(
+        val routeId: String,
+        val selectedIndices: MutableList<Int>
+    )
+
+    private fun sendHelp(player: Player) {
+        player.sendMessage("""
+            §6Route Commands:
+            §f/route add <system> <name> - Create a new route
+            §f/route show <route> - Show route details
+            §f/route addstation <route> <station> - Add station to route
+            §f/route reorder <route> - Reorder stations in route
+            §f/route remove <route> - Remove a route
+        """.trimIndent())
+    }
+
     override fun onTabComplete(
         sender: CommandSender,
         command: Command,
@@ -164,21 +255,5 @@ class RouteCommand(private val plugin: TransitPlugin) : CommandExecutor, TabComp
             }
             else -> emptyList()
         }
-    }
-
-    private data class ReorderSession(
-        val routeId: String,
-        val selectedIndices: MutableList<Int>
-    )
-
-    private fun sendHelp(player: Player) {
-        player.sendMessage("""
-            §6Route Commands:
-            §f/route add <system> <name> - Create a new route
-            §f/route show <route> - Show route details
-            §f/route addstation <route> <station> - Add station to route
-            §f/route reorder <route> - Reorder stations in route
-            §f/route remove <route> - Remove a route
-        """.trimIndent())
     }
 }

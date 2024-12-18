@@ -2,6 +2,7 @@ package com.example.transit.manager
 
 import com.example.transit.TransitPlugin
 import com.example.transit.model.*
+import com.example.transit.fare.ZoneFareCalculator
 import net.milkbowl.vault.economy.Economy
 import org.bukkit.entity.Player
 import java.time.LocalDateTime
@@ -13,8 +14,16 @@ class FareManager(
     private val economy: Economy
 ) {
     private val activeTaps = ConcurrentHashMap<UUID, TapData>()
-    private val zoneFareCalculator = ZoneFareCalculator(plugin.config.getConfigurationSection("systems"))
+    private val activeJourneys = ConcurrentHashMap<UUID, JourneyData>()
+    private val zoneFareCalculator = ZoneFareCalculator(plugin.config.getConfigurationSection("systems") 
+        ?: throw IllegalStateException("Missing systems configuration"))
     
+    fun getActiveJourney(playerId: UUID): JourneyData? = activeJourneys[playerId]
+
+    fun clearActiveJourney(playerId: UUID) {
+        activeJourneys.remove(playerId)
+    }
+
     fun handleTapIn(player: Player, systemId: String, stationId: String): Boolean {
         val station = plugin.stationManager.getStation(stationId) ?: return false
         val system = plugin.configManager.getTransitSystem(systemId) ?: return false
@@ -22,6 +31,12 @@ class FareManager(
         when (system.fareType) {
             FareType.FLAT -> handleFlatFare(player, system, station)
             else -> {
+                activeJourneys[player.uniqueId] = JourneyData(
+                    systemId = systemId,
+                    startStation = stationId,
+                    startLocation = player.location,
+                    startTime = LocalDateTime.now()
+                )
                 activeTaps[player.uniqueId] = TapData(
                     systemId = systemId,
                     stationId = stationId,
@@ -40,6 +55,7 @@ class FareManager(
         val fare = calculateFare(tapData, stationId, system)
         if (chargeFare(player, fare)) {
             activeTaps.remove(player.uniqueId)
+            activeJourneys.remove(player.uniqueId)
             
             // Log transaction
             plugin.transactionManager.logTransaction(
@@ -57,6 +73,23 @@ class FareManager(
             return true
         }
         return false
+    }
+
+    fun chargeMaximumFare(player: Player, system: TransitSystem) {
+        val fare = system.maxFare
+        if (chargeFare(player, fare)) {
+            plugin.transactionManager.logTransaction(
+                Transaction(
+                    playerId = player.uniqueId,
+                    systemId = system.id,
+                    fromStation = "MAX_FARE_CHARGE",
+                    toStation = null,
+                    amount = fare,
+                    type = TransactionType.FLAT_RATE
+                )
+            )
+            player.sendMessage("§cMaximum fare charged: $${fare}")
+        }
     }
 
     private fun handleFlatFare(player: Player, system: TransitSystem, station: Station) {
@@ -86,10 +119,10 @@ class FareManager(
                 val distance = entryStation.location.distance(exitStation.location)
                 val baseRate = system.fareData["baseRate"] as Double
                 val perBlock = system.fareData["perBlock"] as Double
-                baseRate + (distance * perBlock)
+                minOf(baseRate + (distance * perBlock), system.maxFare)
             }
             FareType.FLAT -> system.fareData["fare"] as Double
-        }
+        }.coerceAtMost(system.maxFare)
     }
 
     private fun chargeFare(player: Player, amount: Double): Boolean {

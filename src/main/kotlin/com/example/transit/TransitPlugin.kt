@@ -85,6 +85,16 @@ class TransitPlugin : JavaPlugin() {
             cmd.setExecutor(executor)
             cmd.tabCompleter = executor
         }
+        getCommand("staff")?.let { cmd ->
+            val executor = StaffCommand(this)
+            cmd.setExecutor(executor)
+            cmd.tabCompleter = executor
+        }
+        getCommand("stats")?.let { cmd ->
+            val executor = StatisticsCommand(this)
+            cmd.setExecutor(executor)
+            cmd.tabCompleter = executor
+        }
     }
 
     private fun registerEvents() {
@@ -110,7 +120,7 @@ class TransitPlugin : JavaPlugin() {
     private fun startAutoSave() {
         val saveInterval = config.getLong("settings.saveInterval", 300L) * 20L // Convert seconds to ticks
         server.scheduler.runTaskTimer(this, Runnable {
-            saveAll()
+            saveAllData()
         }, saveInterval, saveInterval)
     }
 
@@ -124,12 +134,11 @@ class TransitPlugin : JavaPlugin() {
         gateManager.reload()
         staffManager.reload()
         statisticsManager.reload()
-        transactionManager.reload()
         
         logger.info("Transit plugin reloaded successfully!")
     }
 
-    private fun saveAll() {
+    private fun saveAllData() {
         try {
             // Save all manager data
             stationManager.saveAll()
@@ -153,7 +162,7 @@ class TransitPlugin : JavaPlugin() {
     override fun onDisable() {
         try {
             // Save all data before shutdown
-            saveAll()
+            saveAllData()
             
             // Cancel all scheduled tasks
             server.scheduler.cancelTasks(this)

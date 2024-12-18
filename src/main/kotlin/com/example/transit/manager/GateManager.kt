@@ -20,6 +20,11 @@ class GateManager(private val plugin: TransitPlugin) {
         loadGates()
     }
 
+    fun reload() {
+        gates.clear()
+        loadGates()
+    }
+
     fun startGateCreation(player: Player, location: Location) {
         GateSetupConversation(plugin, location, player).start()
     }
@@ -35,6 +40,20 @@ class GateManager(private val plugin: TransitPlugin) {
         gates.remove(gateId)
         config.set(gateId, null)
         saveConfig()
+    }
+
+    fun removeGatesForStation(stationId: String) {
+        val gatesToRemove = gates.values.filter { it.stationId == stationId }
+        gatesToRemove.forEach { gate ->
+            gates.remove(gate.id)
+            config.set(gate.id, null)
+        }
+        saveConfig()
+    }
+
+    fun updateStationGates(stationId: String) {
+        gates.values.filter { it.stationId == stationId }
+            .forEach { updateGateSign(it) }
     }
 
     fun getGateAtLocation(location: Location): Gate? {

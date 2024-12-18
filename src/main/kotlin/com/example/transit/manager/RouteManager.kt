@@ -15,6 +15,11 @@ class RouteManager(private val plugin: TransitPlugin) {
         loadRoutes()
     }
 
+    fun reload() {
+        routes.clear()
+        loadRoutes()
+    }
+
     private fun loadRoutes() {
         for (routeId in config.getKeys(false)) {
             val section = config.getConfigurationSection(routeId) ?: continue
@@ -57,6 +62,9 @@ class RouteManager(private val plugin: TransitPlugin) {
 
     fun getStationRoutes(stationId: String): List<Route> =
         routes.values.filter { it.stations.contains(stationId) }
+
+    fun getStationRoute(stationId: String): String? =
+        routes.values.firstOrNull { it.stations.contains(stationId) }?.id
 
     fun addStationToRoute(routeId: String, stationId: String): Boolean {
         return routes[routeId]?.let { route ->
