@@ -2,9 +2,9 @@
 
 🚇 A comprehensive Minecraft plugin for managing public transportation systems including subways, buses, and railways.
 
-[![GitHub release](https://img.shields.io/github/v/release/yourusername/Transit)](https://github.com/yourusername/Transit/releases)
-[![License](https://img.shields.io/github/license/yourusername/Transit)](LICENSE)
-[![Spigot](https://img.shields.io/badge/Spigot-1.20.4-yellow.svg)](https://www.spigotmc.org/resources/transit.12345)
+[![GitHub release](https://img.shields.io/github/v/release/yourusername/Transit)](https://github.com/mataleogml/Transit/releases)
+[![License](https://img.shields.io/github/license/mataleogml/Transit)](LICENSE)
+[![Spigot](https://img.shields.io/badge/Spigot-1.20-yellow.svg)](https://www.spigotmc.org/resources/transit.12345)
 
 ## Features
 
@@ -342,19 +342,6 @@ settings:
 3. Commit your changes
 4. Push to the branch
 5. Create a Pull Request
-
-## 📜 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🌟 Support
-- GitHub Issues: [Report a bug](https://github.com/yourusername/Transit/issues)
-- Discord: [Join our community](https://discord.gg/yourdiscord)
-- Wiki: [Detailed documentation](https://github.com/yourusername/Transit/wiki)
-
-## ✨ Acknowledgments
-- Contributors
-- Spigot community
-- Used libraries and dependencies
 
 ---
 
