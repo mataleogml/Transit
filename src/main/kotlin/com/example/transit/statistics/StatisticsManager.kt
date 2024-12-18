@@ -1,4 +1,3 @@
-// src/main/kotlin/com/example/transit/statistics/StatisticsManager.kt
 package com.example.transit.statistics
 
 import com.example.transit.TransitPlugin
@@ -92,10 +91,10 @@ class StatisticsManager(private val plugin: TransitPlugin) {
                     lastUpdated = LocalDateTime.parse(section.getString("lastUpdated") 
                         ?: LocalDateTime.now().toString()),
                     hourlyStats = section.getConfigurationSection("hourlyStats")?.let { hourlySection ->
-                        hourlySection.getKeys(false).associate {
-                            it.toInt() to hourlySection.getInt(it)
-                        }
-                    } ?: mutableMapOf()
+    hourlySection.getKeys(false).associate {
+        it.toInt() to hourlySection.getInt(it)
+    }.toMutableMap()
+} ?: mutableMapOf()
                 )
             } catch (e: Exception) {
                 plugin.logger.severe("Failed to load statistics for $entityId: ${e.message}")

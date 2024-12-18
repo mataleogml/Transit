@@ -2,6 +2,7 @@ package com.example.transit.command
 
 import com.example.transit.TransitPlugin
 import com.example.transit.model.*
+import com.example.transit.statistics.StatisticsManager
 import com.example.transit.statistics.StatisticsManager.StatisticsPeriod
 import org.bukkit.command.Command
 import org.bukkit.command.CommandExecutor

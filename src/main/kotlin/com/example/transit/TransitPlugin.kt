@@ -124,6 +124,17 @@ class TransitPlugin : JavaPlugin() {
         }, saveInterval, saveInterval)
     }
 
+fun reload() {
+    reloadConfig()
+    configManager.reload()
+    stationManager.reload()
+    routeManager.reload()
+    fareManager.reload()
+    statisticsManager.reload()
+    staffManager.reload()
+    gateManager.reload()
+}
+
     fun reloadPlugin() {
         reloadConfig()
         configManager.reloadConfig()
