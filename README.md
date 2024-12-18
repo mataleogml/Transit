@@ -127,28 +127,109 @@ staff:
 
 ## 🎮 Commands
 
-### General Commands
-| Command | Description |
-|---------|-------------|
-| `/transit` | Main plugin command |
-| `/station` | Station management |
-| `/route` | Route management |
-| `/fare` | Fare management |
+### Transit System Management (`/transit`)
+Base Permission: `transit.admin`
 
-### Admin Commands
-| Command | Description |
-|---------|-------------|
-| `/transit staff add <system> <player>` | Add staff member |
-| `/transit staff salary <system> <player> <amount>` | Set staff salary |
-| `/station add <system> <name>` | Create station |
-| `/route add <system> <route> <station>` | Add to route |
+| Command | Description | Usage |
+|---------|-------------|--------|
+| `/transit create <id> <name> <faretype>` | Create a new transit system | `/transit create Subway "City Metro" ZONE` |
+| `/transit info <system>` | View system information | `/transit info Subway` |
+| `/transit config reload` | Reload configuration | `/transit config reload` |
+| `/transit config save` | Save configuration | `/transit config save` |
 
-### User Commands
-| Command | Description |
-|---------|-------------|
-| `/route show <route>` | View route map |
-| `/station tp <name>` | Teleport to station |
-| `/fare check` | Check current fare |
+### Station Management (`/station`)
+Base Permission: `transit.admin` for management, `transit.tp` for teleporting
+
+| Command | Description | Usage |
+|---------|-------------|--------|
+| `/station add <system> <name> [zone]` | Create a new station | `/station add Subway Central 1` |
+| `/station remove <system> <name>` | Remove a station | `/station remove Subway Central` |
+| `/station enable <system> <name>` | Enable a station | `/station enable Subway Central` |
+| `/station disable <system> <name>` | Disable a station | `/station disable Subway Central` |
+| `/station maintenance <system> <name>` | Set station maintenance mode | `/station maintenance Subway Central` |
+| `/station tp <system> <name>` | Teleport to station | `/station tp Subway Central` |
+| `/station list <system>` | List all stations | `/station list Subway` |
+
+### Route Management (`/route`)
+Base Permission: `transit.admin`
+
+| Command | Description | Usage |
+|---------|-------------|--------|
+| `/route add <system> <name>` | Create a new route | `/route add Subway RedLine` |
+| `/route show <route>` | Display route information | `/route show Subway_RedLine` |
+| `/route addstation <route> <station>` | Add station to route | `/route addstation Subway_RedLine Central` |
+| `/route reorder <route>` | Reorder stations in route | `/route reorder Subway_RedLine` |
+| `/route remove <route>` | Remove a route | `/route remove Subway_RedLine` |
+
+### Fare Management (`/fare`)
+Base Permission: `transit.admin`
+
+| Command | Description | Usage |
+|---------|-------------|--------|
+| `/fare refund <uuid>` | Refund a transaction | `/fare refund abc-123-def` |
+| `/fare <system>` | Check system balance | `/fare Subway` |
+
+### Staff Management (`/staff`)
+Base Permission: `transit.staff.*`
+
+| Command | Description | Usage |
+|---------|-------------|--------|
+| `/staff list <system>` | List all staff members | `/staff list Subway` |
+| `/staff add <system> <player> <salary> [role] [period]` | Add staff member | `/staff add Subway steve 1000 CONDUCTOR MONTHLY` |
+| `/staff remove <system> <player>` | Remove staff member | `/staff remove Subway steve` |
+| `/staff role <system> <player> <role>` | Change staff role | `/staff role Subway steve SUPERVISOR` |
+| `/staff shift <start/end> <system>` | Manage staff shifts | `/staff shift start Subway` |
+| `/staff performance <player>` | View staff performance | `/staff performance steve` |
+| `/staff salary <system> <player> <amount>` | Update staff salary | `/staff salary Subway steve 1200` |
+
+### Statistics (`/stats`)
+Base Permission: `transit.stats`
+
+| Command | Description | Usage |
+|---------|-------------|--------|
+| `/stats system <systemId> [period]` | View system statistics | `/stats system Subway MONTHLY` |
+| `/stats station <stationId> [period]` | View station statistics | `/stats station Subway_Central WEEKLY` |
+| `/stats route <routeId> [period]` | View route statistics | `/stats route Subway_RedLine DAILY` |
+| `/stats report <systemId> <startDate> <endDate>` | Generate detailed report | `/stats report Subway 2024-01-01 2024-01-31` |
+| `/stats peaks <systemId>` | View peak usage times | `/stats peaks Subway` |
+| `/stats export <systemId> <type>` | Export statistics | `/stats export Subway csv` |
+
+## 🔑 Permission Nodes
+
+### Administrative
+- `transit.admin` - Full administrative access
+- `transit.stats` - Access to statistics
+- `transit.staff.*` - All staff management permissions
+  - `transit.staff.add` - Add staff members
+  - `transit.staff.remove` - Remove staff members
+  - `transit.staff.list` - List staff members
+  - `transit.staff.role` - Modify staff roles
+  - `transit.staff.salary` - Modify staff salaries
+  - `transit.staff.performance` - View performance stats
+
+### General Use
+- `transit.tp` - Teleport to stations
+- `transit.use` - Use transit systems
+
+## 📊 Statistics Periods
+Available periods for statistical commands:
+- `DAILY` - Current day
+- `WEEKLY` - Current week
+- `MONTHLY` - Current month
+- `ALL_TIME` - All recorded data
+
+## 🎭 Staff Roles
+Available staff roles:
+- `TRAINEE` - New staff members
+- `CONDUCTOR` - Regular staff
+- `SUPERVISOR` - Senior staff
+- `MANAGER` - System managers
+
+## 💰 Payment Periods
+Available payment periods for staff:
+- `DAILY` - Daily payments
+- `WEEKLY` - Weekly payments
+- `MONTHLY` - Monthly payments
 
 ## 🔧 API Integration
 

@@ -29,13 +29,17 @@ class TransitPlugin : JavaPlugin() {
         try {
             // Save default config and messages
             saveDefaultConfig()
-            saveResource("messages.yml", false)
+            try {
+                saveResource("messages.yml", false)
+            } catch (e: IllegalArgumentException) {
+                // File already exists, ignore
+            }
             reloadConfig()
             
             // Setup Vault
             if (!setupEconomy()) {
                 logger.severe("Disabled due to no Vault dependency found!")
-                server.pluginManager.disablePlugin(this)
+                isEnabled = false
                 return
             }
 
@@ -60,7 +64,7 @@ class TransitPlugin : JavaPlugin() {
         } catch (e: Exception) {
             logger.severe("Failed to enable Transit plugin: ${e.message}")
             e.printStackTrace()
-            server.pluginManager.disablePlugin(this)
+            isEnabled = false
         }
     }
 
@@ -105,25 +109,27 @@ class TransitPlugin : JavaPlugin() {
     }
 
     private fun setupEconomy(): Boolean {
-        if (server.pluginManager.getPlugin("Vault") == null) {
+        if (!isEnabled) {
             return false
         }
         
         val rsp = server.servicesManager.getRegistration(Economy::class.java)
-        if (rsp != null) {
-            economy = rsp.provider
-            return true
+        if (rsp == null) {
+            logger.severe("No Vault economy service found! Make sure Vault is properly installed.")
+            return false
         }
-        return false
+        
+        economy = rsp.provider
+        logger.info("Successfully hooked into Vault economy!")
+        return true
     }
 
     private fun startAutoSave() {
-        val saveInterval = config.getLong("settings.saveInterval", 300L) * 20L // Convert seconds to ticks
+        val saveInterval = config.getLong("settings.saveInterval", DEFAULT_SAVE_INTERVAL) * 20L // Convert seconds to ticks
         server.scheduler.runTaskTimer(this, Runnable {
             saveAllData()
         }, saveInterval, saveInterval)
     }
-
 
     fun reload() {
         try {
@@ -154,6 +160,8 @@ class TransitPlugin : JavaPlugin() {
     }
 
     private fun saveAllData() {
+        if (!isEnabled) return  // Don't save if plugin is disabled
+        
         try {
             // Save all manager data
             stationManager.saveAll()
@@ -176,8 +184,10 @@ class TransitPlugin : JavaPlugin() {
 
     override fun onDisable() {
         try {
-            // Save all data before shutdown
-            saveAllData()
+            if (isEnabled) {  // Only save if we were properly enabled
+                // Save all data before shutdown
+                saveAllData()
+            }
             
             // Cancel all scheduled tasks
             server.scheduler.cancelTasks(this)

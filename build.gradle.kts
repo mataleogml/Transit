@@ -57,15 +57,30 @@ tasks {
     }
     
     processResources {
+        // Only apply token replacement to plugin.yml
         filesMatching("plugin.yml") {
             expand(
                 "version" to project.version,
                 "name" to project.name
             )
         }
+        
+        // Disable filtering for config.yml and messages.yml
+        filesMatching("config.yml") {
+            filter { line -> line }  // Identity filter - copies line as-is
+            filteringCharset = "UTF-8"
+        }
+        filesMatching("messages.yml") {
+            filter { line -> line }  // Identity filter - copies line as-is
+            filteringCharset = "UTF-8"
+        }
     }
 
     test {
         useJUnitPlatform()
+    }
+    
+    build {
+        dependsOn(shadowJar)
     }
 }

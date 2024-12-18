@@ -1,0 +1,47 @@
+# Transit Plugin Messages
+general:
+  prefix: "&7[&bTransit&7]&r "
+  no-permission: "&cYou don't have permission to do that!"
+  player-only: "&cThis command can only be used by players!"
+  invalid-args: "&cInvalid arguments! Usage: {usage}"
+  reload-success: "&aConfiguration reloaded successfully!"
+
+stations:
+  created: "&aStation {name} created successfully!"
+  deleted: "&aStation {name} deleted successfully!"
+  not-found: "&cStation {name} not found!"
+  already-exists: "&cA station with that name already exists!"
+  status-changed: "&aStation {name} status changed to {status}"
+
+routes:
+  created: "&aRoute {name} created successfully!"
+  deleted: "&aRoute {name} deleted successfully!"
+  not-found: "&cRoute {name} not found!"
+  already-exists: "&cA route with that name already exists!"
+  station-added: "&aStation {station} added to route {route}"
+  station-removed: "&aStation {station} removed from route {route}"
+
+fares:
+  insufficient-funds: "&cYou don't have enough money! Required: {amount}"
+  payment-success: "&aPayment successful! Paid: {amount}"
+  refund-success: "&aRefund successful! Amount: {amount}"
+  tap-in: "&aWelcome to {station}! Fare: {amount}"
+  tap-out: "&aThank you for traveling! Final fare: {amount}"
+
+staff:
+  added: "&aAdded {player} as staff for {system}"
+  removed: "&aRemoved {player} from staff for {system}"
+  salary-set: "&aSalary for {player} set to {amount}"
+  shift-started: "&aShift started for {system}"
+  shift-ended: "&aShift ended. Duration: {duration}"
+
+gates:
+  created: "&aGate created successfully!"
+  deleted: "&aGate deleted successfully!"
+  invalid-setup: "&cInvalid gate setup!"
+
+errors:
+  invalid-system: "&cInvalid transit system!"
+  invalid-player: "&cPlayer not found!"
+  invalid-amount: "&cInvalid amount!"
+  database-error: "&cDatabase error occurred! Please contact an administrator."
